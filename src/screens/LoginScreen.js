@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { View, Text, TextInput, Pressable, Image } from "react-native";
 import { COLORS } from "../constants/colors";
 import styles from "../styles/loginStyles";
@@ -24,8 +24,16 @@ export default function LoginScreen({
   return (
     <View style={styles.root}>
       <View style={styles.bgBase} />
-      <View style={styles.semiCircleBlue} />
-      <View style={styles.semiCircleOrange} />
+      <View style={styles.topLeftBlue} />
+      <View style={styles.topLeftBlueSoft} />
+      <View style={styles.topLeftOrange} />
+      <View style={styles.topRightOrange} />
+      <View style={styles.dotOrange} />
+      <View style={styles.dotBlue} />
+      <View style={styles.crossBlue} />
+      <View style={styles.bottomWave1} />
+      <View style={styles.bottomWave2} />
+      <View style={styles.bottomWave3} />
 
       <View style={styles.card}>
         <Image

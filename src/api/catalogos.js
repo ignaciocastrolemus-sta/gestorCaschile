@@ -1,5 +1,4 @@
-// Base API
-const API_BASE = "http://localhost:5067/api";
+﻿import { API_BASE } from "../config/api";
 
 // Helper: fetch + JSON
 async function fetchJson(url, token) {
@@ -9,28 +8,32 @@ async function fetchJson(url, token) {
   return await res.json();
 }
 
-// Catálogo: regiones
+// CatÃ¡logo: regiones
 export async function obtenerRegiones(token) {
   return await fetchJson(`${API_BASE}/Regiones`, token);
 }
 
-// Catálogo: comunas
+// CatÃ¡logo: comunas
 export async function obtenerComunas(token) {
   return await fetchJson(`${API_BASE}/Comunas`, token);
 }
 
-// Catálogo: capacitadores
+// CatÃ¡logo: capacitadores
 export async function obtenerCapacitadores(token) {
   return await fetchJson(`${API_BASE}/Capacitadores`, token);
 }
 
-// Catálogo: jefes de proyecto
+// CatÃ¡logo: jefes de proyecto
 export async function obtenerJefesProyecto(token) {
   return await fetchJson(`${API_BASE}/JefesProyecto`, token);
 }
 
-// Catálogo: municipios por región
+// CatÃ¡logo: municipios por regiÃ³n
 export async function obtenerMunicipios(regionId, token) {
   const params = regionId ? `?region=${encodeURIComponent(regionId)}` : "";
   return await fetchJson(`${API_BASE}/Municipios${params}`, token);
 }
+
+
+
+

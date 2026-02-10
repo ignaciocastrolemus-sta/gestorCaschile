@@ -1,5 +1,6 @@
+﻿import { API_BASE } from "../config/api";
 // Endpoint base: ViajesGastos
-const API_URL = "http://localhost:5067/api/ViajesGastos";
+const API_URL = `${API_BASE}/ViajesGastos`;
 
 // Convierte DD/MM/AAAA a YYYY-MM-DD (para backend)
 function toIsoDate(fechaDDMMYYYY) {
@@ -72,3 +73,5 @@ export async function eliminarViaje(id) {
   if (!res.ok) throw new Error("Error al eliminar");
   return true;
 }
+
+
