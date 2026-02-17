@@ -42,11 +42,7 @@ export function parseFecha(value) {
   if (mm < 1 || mm > 12) return null;
   if (dd < 1 || dd > 31) return null;
   const date = new Date(yyyy, mm - 1, dd);
-  if (
-    date.getFullYear() !== yyyy ||
-    date.getMonth() !== mm - 1 ||
-    date.getDate() !== dd
-  ) {
+  if (date.getFullYear() !== yyyy || date.getMonth() !== mm - 1 || date.getDate() !== dd) {
     return null;
   }
   return date;

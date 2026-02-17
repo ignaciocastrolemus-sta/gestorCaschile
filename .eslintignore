@@ -1,0 +1,12 @@
+# Dependencias / cache
+node_modules
+.expo
+
+# Builds
+dist
+build
+coverage
+
+# Archivos de scripts/seed (no son JS)
+scripts/*.sql
+

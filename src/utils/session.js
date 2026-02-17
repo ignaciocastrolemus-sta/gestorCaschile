@@ -29,12 +29,8 @@ export function clearSession() {
 }
 
 export function loadSession() {
-  const token =
-    localStorage.getItem(STORAGE_TOKEN_KEY) ||
-    sessionStorage.getItem(STORAGE_TOKEN_KEY);
-  const tsRaw =
-    localStorage.getItem(STORAGE_TS_KEY) ||
-    sessionStorage.getItem(STORAGE_TS_KEY);
+  const token = localStorage.getItem(STORAGE_TOKEN_KEY) || sessionStorage.getItem(STORAGE_TOKEN_KEY);
+  const tsRaw = localStorage.getItem(STORAGE_TS_KEY) || sessionStorage.getItem(STORAGE_TS_KEY);
   const ts = Number(tsRaw);
   return { token, ts };
 }

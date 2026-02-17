@@ -14,5 +14,3 @@ export async function obtenerMontos(regionId, comuna, signal) {
   if (!res.ok) throw new Error("Error al obtener montos");
   return await res.json();
 }
-
-

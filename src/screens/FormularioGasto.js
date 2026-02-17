@@ -3,6 +3,8 @@ import { View, Text, ScrollView, Pressable, Modal } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Field, Small } from "../components/FormFields";
+import PageHeader from "../components/PageHeader";
+import KpiRow from "../components/KpiRow";
 import {
   obtenerCapacitadores,
   obtenerComunas,
@@ -33,9 +35,10 @@ export default function FormularioGasto({
 
   React.useEffect(() => {
     let alive = true;
-    if (!token) return () => {
-      alive = false;
-    };
+    if (!token)
+      return () => {
+        alive = false;
+      };
     (async () => {
       try {
         const [regionesRes, comunasRes, capsRes, jefesRes] = await Promise.all([
@@ -60,11 +63,7 @@ export default function FormularioGasto({
         const comunasMap = {};
         if (Array.isArray(comunasRes)) {
           comunasRes.forEach((c) => {
-            const regionName =
-              c?.region?.nombre ??
-              c?.region?.Nombre ??
-              c?.regionNombre ??
-              c?.RegionNombre;
+            const regionName = c?.region?.nombre ?? c?.region?.Nombre ?? c?.regionNombre ?? c?.RegionNombre;
             const comunaNombre = c?.nombre ?? c?.Nombre ?? c;
             if (!regionName || !comunaNombre) return;
             if (!comunasMap[regionName]) comunasMap[regionName] = [];
@@ -107,9 +106,7 @@ export default function FormularioGasto({
       return;
     }
     const normalized = regionName.toLowerCase();
-    const region = regiones.find(
-      (r) => (r.nombre || "").toLowerCase() === normalized
-    );
+    const region = regiones.find((r) => (r.nombre || "").toLowerCase() === normalized);
     const regionId = region?.id;
     if (!regionId) {
       setMunicipios([]);
@@ -129,7 +126,7 @@ export default function FormularioGasto({
     return () => {
       alive = false;
     };
-  }, [form.region, regiones]);
+  }, [form.region, regiones, token]);
 
   const weekDays = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
   const monthNames = [
@@ -150,11 +147,7 @@ export default function FormularioGasto({
     if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return null;
     const [dd, mm, yyyy] = value.split("/").map(Number);
     const date = new Date(yyyy, mm - 1, dd);
-    if (
-      date.getFullYear() !== yyyy ||
-      date.getMonth() !== mm - 1 ||
-      date.getDate() !== dd
-    ) {
+    if (date.getFullYear() !== yyyy || date.getMonth() !== mm - 1 || date.getDate() !== dd) {
       return null;
     }
     return date;
@@ -162,9 +155,7 @@ export default function FormularioGasto({
   const isSameDay = (a, b) => {
     if (!a || !b) return false;
     return (
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
     );
   };
   const buildCalendarCells = (year, month) => {
@@ -186,10 +177,7 @@ export default function FormularioGasto({
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
   const selectedDate = parseFecha(form.fechaInicio);
-  const calendarCells = buildCalendarCells(
-    calendarMonth.getFullYear(),
-    calendarMonth.getMonth()
-  );
+  const calendarCells = buildCalendarCells(calendarMonth.getFullYear(), calendarMonth.getMonth());
   const openCalendar = () => {
     const selected = parseFecha(form.fechaInicio);
     const base = selected || new Date();
@@ -201,14 +189,10 @@ export default function FormularioGasto({
     setCalendarOpen(false);
   };
   const onPrevMonth = () => {
-    setCalendarMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
-    );
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   };
   const onNextMonth = () => {
-    setCalendarMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
-    );
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
   };
   const diasParaCalculo = diasHabiles > 0 ? diasHabiles : Number(form.dias || 0);
   const subtotalAsignacion =
@@ -217,7 +201,8 @@ export default function FormularioGasto({
     Number(form.once || 0) +
     Number(form.cena || 0) +
     Number(form.viatico || 0);
-  const subtotalAsignacionTotal = subtotalAsignacion * (Number.isFinite(diasParaCalculo) ? diasParaCalculo : 0);
+  const subtotalAsignacionTotal =
+    subtotalAsignacion * (Number.isFinite(diasParaCalculo) ? diasParaCalculo : 0);
   const totalManual =
     Number(form.movAsignado || 0) +
     Number(form.transferUber || 0) +
@@ -226,6 +211,22 @@ export default function FormularioGasto({
     Number(form.reembolsos || 0) +
     Number(form.varios || 0) +
     Number(form.copec || 0);
+
+  // KPI para resumen rapido del formulario de asignacion.
+  const kpiItems = [
+    { key: "dias", label: "Dias habiles", value: diasParaCalculo || 0 },
+    {
+      key: "asignacion",
+      label: "Asignacion total",
+      value: `$ ${subtotalAsignacionTotal.toLocaleString("es-CL")}`,
+    },
+    { key: "manual", label: "Gasto manual", value: `$ ${totalManual.toLocaleString("es-CL")}` },
+    {
+      key: "tipo",
+      label: "Tipo de viaje",
+      value: tipo === "regiones" ? "Regiones" : "Santiago",
+    },
+  ];
 
   const regionesNombres = regiones.map((r) => r.nombre);
   const regionesFiltradas = regionesNombres.filter((r) =>
@@ -250,17 +251,14 @@ export default function FormularioGasto({
   };
   const showCapacitadores =
     !!form.capacitador && capacitadoresFiltrados.length > 0 && !isExactMatch(form.capacitador, capacitadores);
-  const showJefes =
-    !!form.jefe && jefesFiltrados.length > 0 && !isExactMatch(form.jefe, jefesProyecto);
+  const showJefes = !!form.jefe && jefesFiltrados.length > 0 && !isExactMatch(form.jefe, jefesProyecto);
   const showRegiones =
     tipo === "regiones" &&
     !!form.region &&
     regionesFiltradas.length > 0 &&
     !isExactMatch(form.region, regionesNombres);
   const showComunas =
-    !!form.comuna &&
-    comunasFiltradas.length > 0 &&
-    !isExactMatch(form.comuna, municipiosDisponibles);
+    !!form.comuna && comunasFiltradas.length > 0 && !isExactMatch(form.comuna, municipiosDisponibles);
 
   const DateField = ({ label, value, placeholder, onPress }) => (
     <View style={{ flex: 1, marginBottom: 12 }}>
@@ -275,10 +273,11 @@ export default function FormularioGasto({
 
   return (
     <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-      <Text style={dash.h1}>
-        {tipo === "regiones" ? "Ingresar gasto (Regiones)" : "Ingresar gasto (Santiago)"}
-      </Text>
-      <Text style={dash.h2}>Formulario </Text>
+      <PageHeader
+        title={tipo === "regiones" ? "Ingresar gasto (Regiones)" : "Ingresar gasto (Santiago)"}
+        subtitle="Formulario de asignacion de viaje."
+      />
+      <KpiRow items={kpiItems} />
 
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Datos del viaje</Text>
@@ -291,17 +290,13 @@ export default function FormularioGasto({
                 style={[dash.toggleBtn, tipo === "santiago" && dash.toggleBtnActive]}
                 onPress={() => onChangeTipoViaje("santiago")}
               >
-                <Text style={[dash.toggleText, tipo === "santiago" && dash.toggleTextActive]}>
-                  Santiago
-                </Text>
+                <Text style={[dash.toggleText, tipo === "santiago" && dash.toggleTextActive]}>Santiago</Text>
               </Pressable>
               <Pressable
                 style={[dash.toggleBtn, tipo === "regiones" && dash.toggleBtnActive]}
                 onPress={() => onChangeTipoViaje("regiones")}
               >
-                <Text style={[dash.toggleText, tipo === "regiones" && dash.toggleTextActive]}>
-                  Regiones
-                </Text>
+                <Text style={[dash.toggleText, tipo === "regiones" && dash.toggleTextActive]}>Regiones</Text>
               </Pressable>
             </View>
           </View>
@@ -357,11 +352,7 @@ export default function FormularioGasto({
         {showJefes && (
           <View style={dash.suggestBox}>
             {jefesFiltrados.slice(0, 6).map((item) => (
-              <Pressable
-                key={item}
-                style={dash.suggestItem}
-                onPress={() => onTextChange("jefe", item)}
-              >
+              <Pressable key={item} style={dash.suggestItem} onPress={() => onTextChange("jefe", item)}>
                 <Text style={dash.suggestText}>{item}</Text>
               </Pressable>
             ))}
@@ -370,11 +361,7 @@ export default function FormularioGasto({
         {showRegiones && (
           <View style={dash.suggestBox}>
             {regionesFiltradas.slice(0, 6).map((item) => (
-              <Pressable
-                key={item}
-                style={dash.suggestItem}
-                onPress={() => onTextChange("region", item)}
-              >
+              <Pressable key={item} style={dash.suggestItem} onPress={() => onTextChange("region", item)}>
                 <Text style={dash.suggestText}>{item}</Text>
               </Pressable>
             ))}
@@ -418,12 +405,7 @@ export default function FormularioGasto({
             value={form.fechaInicio}
             onPress={openCalendar}
           />
-          <Field
-            label="Fecha termino viaje"
-            placeholder="DD/MM/AAAA"
-            value={form.fechaTermino}
-            disabled
-          />
+          <Field label="Fecha termino viaje" placeholder="DD/MM/AAAA" value={form.fechaTermino} disabled />
         </View>
         <View style={dash.grid2}>
           <Field
@@ -437,11 +419,7 @@ export default function FormularioGasto({
         {showComunas && (
           <View style={dash.suggestBox}>
             {comunasFiltradas.slice(0, 8).map((item) => (
-              <Pressable
-                key={item}
-                style={dash.suggestItem}
-                onPress={() => onTextChange("comuna", item)}
-              >
+              <Pressable key={item} style={dash.suggestItem} onPress={() => onTextChange("comuna", item)}>
                 <Text style={dash.suggestText}>{item}</Text>
               </Pressable>
             ))}
@@ -493,9 +471,9 @@ export default function FormularioGasto({
         <View style={dash.totalRow}>
           <Text style={dash.totalLabel}>Subtotal</Text>
           <View style={dash.totalBox}>
-          <Text style={dash.totalText}>${subtotalAsignacionTotal.toLocaleString("es-CL")}</Text>
+            <Text style={dash.totalText}>${subtotalAsignacionTotal.toLocaleString("es-CL")}</Text>
+          </View>
         </View>
-      </View>
       </View>
 
       <View style={dash.panel}>
@@ -563,7 +541,7 @@ export default function FormularioGasto({
             disabled
           />
           <Field
-            label="Copec"
+            label="Combustible"
             placeholder="$"
             value={form.copec}
             onChangeText={(value) => onNumberChange("copec", value)}
@@ -610,10 +588,7 @@ export default function FormularioGasto({
                 return (
                   <Pressable
                     key={date.toISOString()}
-                    style={[
-                      dash.calendarDay,
-                      selected && dash.calendarDaySelected,
-                    ]}
+                    style={[dash.calendarDay, selected && dash.calendarDaySelected]}
                     onPress={() => onSelectDate(date)}
                   >
                     <Text

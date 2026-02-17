@@ -8,6 +8,7 @@ import useAuth from "./src/hooks/useAuth";
 import useSecretariaForm from "./src/hooks/useSecretariaForm";
 
 export default function App() {
+  // Maneja todo el estado de autenticacion y cambio de clave.
   const {
     isAuth,
     authToken,
@@ -20,18 +21,28 @@ export default function App() {
     resetCode,
     resetPass,
     resetMsg,
+    forceChange,
+    forceCurrent,
+    forceNew,
+    forceConfirm,
+    forceMsg,
     setEmail,
     setPass,
     setShowReset,
     setResetEmail,
     setResetCode,
     setResetPass,
+    setForceCurrent,
+    setForceNew,
+    setForceConfirm,
     onLogin,
     onLogout,
     onRequestReset,
     onConfirmReset,
+    onForceChange,
   } = useAuth();
 
+  // Maneja el formulario principal de secretaria y sus validaciones.
   const {
     activeMenu,
     setActiveMenu,
@@ -48,20 +59,22 @@ export default function App() {
     resetSecretaria,
   } = useSecretariaForm(authToken);
 
+  // Cierra sesion y limpia el formulario para evitar datos residuales.
   const handleLogout = () => {
     onLogout();
     resetSecretaria();
   };
 
+  // Router principal por rol/perfil autenticado.
   if (isAuth) {
-    const emailLower = authEmail.toLowerCase();
-    if (authRole === "Administrador") {
+    const role = (authRole || "").trim().toLowerCase();
+    if (role === "administrador") {
       return <AdminHome token={authToken} onLogout={handleLogout} email={authEmail} />;
     }
-    if (emailLower === "jose.caschile.cl") {
+    if (role === "usuario terreno") {
       return <CapacitadorHome onLogout={handleLogout} token={authToken} />;
     }
-    if (emailLower === "contadora@caschile.cl") {
+    if (role === "contadora") {
       return <ContadoraHome onLogout={handleLogout} token={authToken} />;
     }
     return (
@@ -84,6 +97,7 @@ export default function App() {
     );
   }
 
+  // Si no hay sesion, muestra pantalla de login y recuperacion.
   return (
     <LoginScreen
       email={email}
@@ -102,12 +116,15 @@ export default function App() {
       onRequestReset={onRequestReset}
       onConfirmReset={onConfirmReset}
       resetMsg={resetMsg}
+      forceChange={forceChange}
+      forceCurrent={forceCurrent}
+      forceNew={forceNew}
+      forceConfirm={forceConfirm}
+      forceMsg={forceMsg}
+      setForceCurrent={setForceCurrent}
+      setForceNew={setForceNew}
+      setForceConfirm={setForceConfirm}
+      onForceChange={onForceChange}
     />
   );
 }
-
-
-
-
-
-

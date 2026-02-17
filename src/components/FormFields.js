@@ -3,8 +3,6 @@ import { View, Text, TextInput, Pressable } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 
-
-
 // Componentes de formulario reutilizables (input, label, etc.)
 
 export function Field({ label, placeholder, value, onChangeText, disabled, keyboardType }) {

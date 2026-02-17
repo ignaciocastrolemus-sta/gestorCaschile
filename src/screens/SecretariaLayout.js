@@ -67,6 +67,11 @@ export default function SecretariaLayout({
             onPress={() => setActiveMenu("carpeta")}
           />
           <MenuItem
+            label="Saldos"
+            active={activeMenu === "saldos"}
+            onPress={() => setActiveMenu("saldos")}
+          />
+          <MenuItem
             label="Asignaciones clientes"
             active={activeMenu === "semanal"}
             onPress={() => setActiveMenu("semanal")}
@@ -80,7 +85,9 @@ export default function SecretariaLayout({
 
         <View style={dash.content}>
           {activeMenu === "carpeta" ? (
-            <CarpetaViajes token={authToken} />
+            <CarpetaViajes token={authToken} viewMode="rendiciones" />
+          ) : activeMenu === "saldos" ? (
+            <CarpetaViajes token={authToken} viewMode="saldos" />
           ) : activeMenu === "semanal" ? (
             <AsignacionSemanal token={authToken} />
           ) : activeMenu === "transfer" ? (

@@ -3,7 +3,6 @@ import { Pressable, Text } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 
-
 // Ítem reutilizable del menú lateral
 
 export default function MenuItem({ label, active, onPress }) {

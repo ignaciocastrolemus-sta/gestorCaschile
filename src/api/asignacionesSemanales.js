@@ -47,6 +47,3 @@ export async function eliminarAsignacionSemanal(token, id) {
   if (!res.ok) throw new Error(await res.text());
   return await res.text();
 }
-
-
-

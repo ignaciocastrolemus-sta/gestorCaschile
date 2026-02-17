@@ -9,15 +9,12 @@ import AdminPeriodos from "./AdminPeriodos";
 import AdminCatalogos from "./AdminCatalogos";
 import AdminTarifas from "./AdminTarifas";
 import ListadoAsignacionesSemanales from "./ListadoAsignacionesSemanales";
-import SecretariaHome from "./SecretariaHome";
-import ContadoraHome from "./ContadoraHome";
-import CapacitadorHome from "./CapacitadorHome";
 import EncuadreRendiciones from "./EncuadreRendiciones";
 
 // Vista Admin: acceso a roles/usuarios y vistas principales
 
 export default function AdminHome({ token, onLogout, email = "" }) {
-  const [activeMenu, setActiveMenu] = useState("secretaria");
+  const [activeMenu, setActiveMenu] = useState("usuarios");
 
   const title = useMemo(() => {
     if (activeMenu === "roles") return "Roles";
@@ -27,9 +24,7 @@ export default function AdminHome({ token, onLogout, email = "" }) {
     if (activeMenu === "tarifas") return "Tarifas";
     if (activeMenu === "catalogos") return "Catalogos";
     if (activeMenu === "listados") return "Listados";
-    if (activeMenu === "contadora") return "Contadora";
-    if (activeMenu === "capacitador") return "Capacitador";
-    return "Secretaria";
+    return "Admin";
   }, [activeMenu]);
 
   return (
@@ -62,21 +57,6 @@ export default function AdminHome({ token, onLogout, email = "" }) {
           <Text style={dash.menuTitle}>ADMIN</Text>
 
           <MenuItem
-            label="Secretaria"
-            active={activeMenu === "secretaria"}
-            onPress={() => setActiveMenu("secretaria")}
-          />
-          <MenuItem
-            label="Contadora"
-            active={activeMenu === "contadora"}
-            onPress={() => setActiveMenu("contadora")}
-          />
-          <MenuItem
-            label="Capacitador"
-            active={activeMenu === "capacitador"}
-            onPress={() => setActiveMenu("capacitador")}
-          />
-          <MenuItem
             label="Usuarios"
             active={activeMenu === "usuarios"}
             onPress={() => setActiveMenu("usuarios")}
@@ -101,11 +81,7 @@ export default function AdminHome({ token, onLogout, email = "" }) {
             active={activeMenu === "periodos"}
             onPress={() => setActiveMenu("periodos")}
           />
-          <MenuItem
-            label="Roles"
-            active={activeMenu === "roles"}
-            onPress={() => setActiveMenu("roles")}
-          />
+          <MenuItem label="Roles" active={activeMenu === "roles"} onPress={() => setActiveMenu("roles")} />
           <MenuItem
             label="Encuadre"
             active={activeMenu === "encuadre"}
@@ -128,16 +104,11 @@ export default function AdminHome({ token, onLogout, email = "" }) {
             <AdminPeriodos token={token} />
           ) : activeMenu === "encuadre" ? (
             <EncuadreRendiciones token={token} />
-          ) : activeMenu === "contadora" ? (
-            <ContadoraHome token={token} onLogout={onLogout} embedded />
-          ) : activeMenu === "capacitador" ? (
-            <CapacitadorHome token={token} onLogout={onLogout} embedded />
           ) : (
-            <SecretariaHome onLogout={onLogout} token={token} embedded />
+            <AdminUsuarios token={token} title={title} />
           )}
         </View>
       </View>
     </View>
   );
 }
-

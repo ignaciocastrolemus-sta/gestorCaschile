@@ -2,9 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { COLORS } from "../constants/colors";
 
-
 // Barra superior (topbar) con acciones principales
-
 
 export default function Topbar({ onLogout }) {
   return (
@@ -49,5 +47,3 @@ const styles = StyleSheet.create({
   linkText: { color: "#fff", fontWeight: "800" },
   logout: { backgroundColor: COLORS.orange },
 });
-
-

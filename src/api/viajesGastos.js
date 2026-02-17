@@ -73,5 +73,3 @@ export async function eliminarViaje(id) {
   if (!res.ok) throw new Error("Error al eliminar");
   return true;
 }
-
-

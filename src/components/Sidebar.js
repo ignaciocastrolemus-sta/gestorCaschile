@@ -2,16 +2,12 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { COLORS } from "../constants/colors";
 
-
 // Sidebar de navegación (Secretaria)
 
 export default function Sidebar({ activeKey, active, onChange }) {
   const current = activeKey ?? active;
   const Item = ({ k, label }) => (
-    <Pressable
-      onPress={() => onChange(k)}
-      style={[styles.item, current === k && styles.itemActive]}
-    >
+    <Pressable onPress={() => onChange(k)} style={[styles.item, current === k && styles.itemActive]}>
       <Text style={[styles.itemText, current === k && styles.itemTextActive]}>{label}</Text>
     </Pressable>
   );

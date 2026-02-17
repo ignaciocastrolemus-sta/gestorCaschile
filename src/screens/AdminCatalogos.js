@@ -1,16 +1,18 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
+import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
-function useCatalogo({ token, path }) {
+function useCatalogo({ token, path, incluirInactivos = false }) {
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/${path}`, {
+      const query = incluirInactivos ? "?incluirInactivos=true" : "";
+      const res = await fetch(`${API_BASE}/${path}${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
@@ -20,11 +22,11 @@ function useCatalogo({ token, path }) {
     } catch (e) {
       setError(e?.message || "Error al cargar.");
     }
-  };
+  }, [path, token, incluirInactivos]);
 
   useEffect(() => {
     load();
-  }, [token, path]);
+  }, [load]);
 
   const create = async (payload) => {
     setLoading(true);
@@ -39,6 +41,10 @@ function useCatalogo({ token, path }) {
       });
       if (!res.ok) throw new Error(await res.text());
       await load();
+      setError("");
+    } catch (e) {
+      setError(e?.message || "No se pudo crear.");
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -57,6 +63,10 @@ function useCatalogo({ token, path }) {
       });
       if (!res.ok) throw new Error(await res.text());
       await load();
+      setError("");
+    } catch (e) {
+      setError(e?.message || "No se pudo actualizar.");
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -71,6 +81,11 @@ function useCatalogo({ token, path }) {
       });
       if (!res.ok) throw new Error(await res.text());
       await load();
+      setError("");
+    } catch (e) {
+      // Tipico: restriccion FK (el registro esta siendo usado).
+      setError(e?.message || "No se pudo eliminar.");
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -84,6 +99,7 @@ export default function AdminCatalogos({ token }) {
   const [editing, setEditing] = useState(null);
   const [nombre, setNombre] = useState("");
   const [extra, setExtra] = useState("");
+  const [showInactivos, setShowInactivos] = useState(false);
 
   const isClientes = activeTab === "clientes";
   const isComunas = activeTab === "comunas";
@@ -92,7 +108,25 @@ export default function AdminCatalogos({ token }) {
   const { items, error, setError, loading, create, update, remove } = useCatalogo({
     token,
     path: isClientes ? "Clientes" : isComunas ? "Comunas" : "Regiones",
+    incluirInactivos: showInactivos,
   });
+
+  const isActivo = (row) => {
+    // Compat: si backend aun no tiene Activo, consideramos activo por defecto.
+    const raw = row?.activo ?? row?.Activo;
+    return raw === undefined ? true : Boolean(raw);
+  };
+
+  const itemsVisibles = useMemo(() => {
+    if (showInactivos) return items;
+    return (items || []).filter((row) => isActivo(row));
+  }, [items, showInactivos]);
+  const totalRegistros = (items || []).length;
+  const totalActivos = useMemo(
+    () => (items || []).filter((row) => isActivo(row)).length,
+    [items],
+  );
+  const totalInactivos = Math.max(0, totalRegistros - totalActivos);
 
   const resetForm = () => {
     setEditing(null);
@@ -112,11 +146,14 @@ export default function AdminCatalogos({ token }) {
       return;
     }
     try {
-      const payload = isRegiones
+      const payloadBase = isRegiones
         ? { nombre: nombre.trim(), romano: extra.trim() }
         : isComunas
-        ? { nombre: nombre.trim(), regionId: Number(extra) }
-        : { nombre: nombre.trim(), comunaId: Number(extra) };
+          ? { nombre: nombre.trim(), regionId: Number(extra) }
+          : { nombre: nombre.trim(), comunaId: Number(extra) };
+
+      // Soft delete: Activo (si el backend lo soporta). Si no existe en backend, se ignora.
+      const payload = { ...payloadBase, activo: editing ? isActivo(editing) : true };
 
       if (editing) {
         await update(editing.id, payload);
@@ -149,11 +186,40 @@ export default function AdminCatalogos({ token }) {
     if (proceed === undefined) {
       Alert.alert("Eliminar", msg, [
         { text: "Cancelar", style: "cancel" },
-        { text: "Eliminar", style: "destructive", onPress: () => remove(row.id) },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => remove(row.id).catch(() => {}),
+        },
       ]);
       return;
     }
-    remove(row.id);
+    remove(row.id).catch(() => {});
+  };
+
+  const onToggleActivo = async (row) => {
+    // Desactivar/Activar sin borrar (para no romper historiales).
+    try {
+      const nextActivo = !isActivo(row);
+      const nombreRow = row?.nombre || row?.Nombre || "";
+      const payload = isRegiones
+        ? { nombre: nombreRow, romano: row?.romano || row?.Romano || "", activo: nextActivo }
+        : isComunas
+          ? {
+              nombre: nombreRow,
+              regionId: Number(row?.regionId ?? row?.RegionId ?? 0),
+              activo: nextActivo,
+            }
+          : {
+              nombre: nombreRow,
+              comunaId: Number(row?.comunaId ?? row?.ComunaId ?? 0),
+              activo: nextActivo,
+            };
+
+      await update(row.id, payload);
+    } catch {
+      // El mensaje se muestra en `error` (lo setea el hook).
+    }
   };
 
   return (
@@ -202,9 +268,7 @@ export default function AdminCatalogos({ token }) {
           style={dash.input}
         />
 
-        <Text style={dash.label}>
-          {isRegiones ? "Romano" : isComunas ? "RegionId" : "ComunaId"}
-        </Text>
+        <Text style={dash.label}>{isRegiones ? "Romano" : isComunas ? "RegionId" : "ComunaId"}</Text>
         <TextInput
           value={extra}
           onChangeText={setExtra}
@@ -228,21 +292,39 @@ export default function AdminCatalogos({ token }) {
       </View>
 
       <View style={dash.panel}>
-        <Text style={dash.panelTitle}>Listado</Text>
-        {items.length === 0 ? (
+        <View style={styles.listHeaderRow}>
+          <Text style={dash.panelTitle}>Listado</Text>
+          <Pressable
+            style={[styles.chipBtn, showInactivos && styles.chipBtnActive]}
+            onPress={() => setShowInactivos((v) => !v)}
+          >
+            <Text style={[styles.chipText, showInactivos && styles.chipTextActive]}>
+              {showInactivos
+                ? `Mostrando todos · Activos (${totalActivos}) · Inactivos (${totalInactivos})`
+                : `Solo activos (${totalActivos}) · Inactivos (${totalInactivos})`}
+            </Text>
+          </Pressable>
+        </View>
+        {itemsVisibles.length === 0 ? (
           <Text style={styles.empty}>No hay registros.</Text>
         ) : (
-          items.map((row) => (
+          itemsVisibles.map((row) => (
             <View key={row.id} style={styles.listRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.listTitle}>{row.nombre || row.Nombre}</Text>
+                {/* Id visible para facilitar pruebas y relaciones (RegionId/ComunaId). */}
+                <Text style={styles.listSub}>Id: {row.id}</Text>
                 {isRegiones && <Text style={styles.listSub}>Romano: {row.romano || row.Romano}</Text>}
                 {isComunas && <Text style={styles.listSub}>RegionId: {row.regionId || row.RegionId}</Text>}
                 {isClientes && <Text style={styles.listSub}>ComunaId: {row.comunaId || row.ComunaId}</Text>}
+                <Text style={styles.listSub}>Activo: {isActivo(row) ? "Si" : "No"}</Text>
               </View>
               <View style={styles.actions}>
                 <Pressable style={styles.smallBtn} onPress={() => onEdit(row)}>
                   <Text style={styles.smallBtnText}>Editar</Text>
+                </Pressable>
+                <Pressable style={styles.smallBtn} onPress={() => onToggleActivo(row)}>
+                  <Text style={styles.smallBtnText}>{isActivo(row) ? "Desactivar" : "Activar"}</Text>
                 </Pressable>
                 <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(row)}>
                   <Text style={styles.smallBtnText}>Eliminar</Text>
@@ -288,6 +370,18 @@ const styles = StyleSheet.create({
   secondaryText: { color: COLORS.blue2, fontWeight: "900" },
   error: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "800" },
+  listHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  chipBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#EEF3FF",
+  },
+  chipBtnActive: { backgroundColor: COLORS.blue2, borderColor: COLORS.blue2 },
+  chipText: { fontWeight: "900", color: COLORS.blue2, fontSize: 12 },
+  chipTextActive: { color: "#fff" },
   listRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -317,8 +411,3 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
-
-
-
-
-

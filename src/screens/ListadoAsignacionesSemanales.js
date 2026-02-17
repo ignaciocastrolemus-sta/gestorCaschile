@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
+import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
-import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Card, Col, Label, Row, SectionTitle, Select } from "../components/UI";
 
@@ -24,20 +24,7 @@ export default function ListadoAsignacionesSemanales({ token }) {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
-  const MONTHS = [
-    "Ene",
-    "Feb",
-    "Mar",
-    "Abr",
-    "May",
-    "Jun",
-    "Jul",
-    "Ago",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dic",
-  ];
+  const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
   const toDate = (value) => {
     if (!value) return null;
@@ -45,7 +32,7 @@ export default function ListadoAsignacionesSemanales({ token }) {
     return Number.isNaN(d.getTime()) ? null : d;
   };
 
-  const buildQuery = () => {
+  const buildQuery = useCallback(() => {
     const params = new URLSearchParams();
     if (periodoId) params.append("periodoId", periodoId);
     if (capacitadorId) params.append("capacitadorId", capacitadorId);
@@ -53,9 +40,9 @@ export default function ListadoAsignacionesSemanales({ token }) {
     if (estado) params.append("estado", estado);
     const q = params.toString();
     return q ? `?${q}` : "";
-  };
+  }, [capacitadorId, clienteId, estado, periodoId]);
 
-  const loadCatalogos = async () => {
+  const loadCatalogos = useCallback(async () => {
     try {
       const [p, c, cl] = await Promise.all([
         fetch(`${API_BASE}/Periodos`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -68,9 +55,9 @@ export default function ListadoAsignacionesSemanales({ token }) {
     } catch {
       // ignore
     }
-  };
+  }, [token]);
 
-  const loadAsignaciones = async () => {
+  const loadAsignaciones = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/AsignacionesSemanales/listado${buildQuery()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -82,9 +69,9 @@ export default function ListadoAsignacionesSemanales({ token }) {
     } catch (e) {
       setError(e?.message || "No se pudo cargar el listado.");
     }
-  };
+  }, [buildQuery, token]);
 
-  const loadPeriodosListado = async () => {
+  const loadPeriodosListado = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/Listados/periodos`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -95,9 +82,9 @@ export default function ListadoAsignacionesSemanales({ token }) {
     } catch (e) {
       setError(e?.message || "No se pudo cargar periodos.");
     }
-  };
+  }, [token]);
 
-  const loadDeudores = async () => {
+  const loadDeudores = useCallback(async () => {
     try {
       const q = periodoId ? `?periodoId=${encodeURIComponent(periodoId)}` : "";
       const res = await fetch(`${API_BASE}/Listados/deudores${q}`, {
@@ -109,9 +96,9 @@ export default function ListadoAsignacionesSemanales({ token }) {
     } catch (e) {
       setError(e?.message || "No se pudo cargar deudores.");
     }
-  };
+  }, [periodoId, token]);
 
-  const loadDevoluciones = async () => {
+  const loadDevoluciones = useCallback(async () => {
     try {
       const q = periodoId ? `?periodoId=${encodeURIComponent(periodoId)}` : "";
       const res = await fetch(`${API_BASE}/Listados/devoluciones${q}`, {
@@ -123,7 +110,7 @@ export default function ListadoAsignacionesSemanales({ token }) {
     } catch (e) {
       setError(e?.message || "No se pudo cargar devoluciones.");
     }
-  };
+  }, [periodoId, token]);
 
   useEffect(() => {
     loadCatalogos();
@@ -131,13 +118,13 @@ export default function ListadoAsignacionesSemanales({ token }) {
     loadPeriodosListado();
     loadDeudores();
     loadDevoluciones();
-  }, [token]);
+  }, [loadAsignaciones, loadCatalogos, loadDeudores, loadDevoluciones, loadPeriodosListado]);
 
   useEffect(() => {
     if (tab === "asignaciones") loadAsignaciones();
     if (tab === "deudores") loadDeudores();
     if (tab === "devoluciones") loadDevoluciones();
-  }, [periodoId, capacitadorId, clienteId, estado, tab]);
+  }, [loadAsignaciones, loadDeudores, loadDevoluciones, tab]);
 
   const yearItems = useMemo(() => {
     const years = new Set();
@@ -159,15 +146,6 @@ export default function ListadoAsignacionesSemanales({ token }) {
       return d.getFullYear() === Number(selectedYear) && d.getMonth() === selectedMonth;
     });
   }, [periodos, selectedMonth, selectedYear]);
-
-  const periodosItemsAll = useMemo(
-    () =>
-      (Array.isArray(periodos) ? periodos : []).map((p) => ({
-        label: p.nombre ?? p.Nombre,
-        value: String(p.id ?? p.Id),
-      })),
-    [periodos]
-  );
 
   const periodosItemsByMonth = useMemo(
     () =>
@@ -247,16 +225,28 @@ export default function ListadoAsignacionesSemanales({ token }) {
       <SectionTitle title="Listados generales" subtitle="Resumenes del sistema con filtros y exportacion." />
 
       <View style={styles.tabRow}>
-        <Pressable style={[styles.tab, tab === "asignaciones" && styles.tabActive]} onPress={() => setTab("asignaciones")}>
+        <Pressable
+          style={[styles.tab, tab === "asignaciones" && styles.tabActive]}
+          onPress={() => setTab("asignaciones")}
+        >
           <Text style={[styles.tabText, tab === "asignaciones" && styles.tabTextActive]}>Asignaciones</Text>
         </Pressable>
-        <Pressable style={[styles.tab, tab === "periodos" && styles.tabActive]} onPress={() => setTab("periodos")}>
+        <Pressable
+          style={[styles.tab, tab === "periodos" && styles.tabActive]}
+          onPress={() => setTab("periodos")}
+        >
           <Text style={[styles.tabText, tab === "periodos" && styles.tabTextActive]}>Periodos</Text>
         </Pressable>
-        <Pressable style={[styles.tab, tab === "deudores" && styles.tabActive]} onPress={() => setTab("deudores")}>
+        <Pressable
+          style={[styles.tab, tab === "deudores" && styles.tabActive]}
+          onPress={() => setTab("deudores")}
+        >
           <Text style={[styles.tabText, tab === "deudores" && styles.tabTextActive]}>Deudores</Text>
         </Pressable>
-        <Pressable style={[styles.tab, tab === "devoluciones" && styles.tabActive]} onPress={() => setTab("devoluciones")}>
+        <Pressable
+          style={[styles.tab, tab === "devoluciones" && styles.tabActive]}
+          onPress={() => setTab("devoluciones")}
+        >
           <Text style={[styles.tabText, tab === "devoluciones" && styles.tabTextActive]}>Devoluciones</Text>
         </Pressable>
       </View>
@@ -375,47 +365,53 @@ export default function ListadoAsignacionesSemanales({ token }) {
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       <Card>
-        {tab === "asignaciones" && (
-          items.length === 0 ? (
+        {tab === "asignaciones" &&
+          (items.length === 0 ? (
             <Text style={styles.empty}>No hay asignaciones.</Text>
           ) : (
             items.map((it) => (
               <View key={it.id} style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>{it.capacitador}</Text>
-                  <Text style={styles.sub}>{it.periodo} - {it.cliente} - {it.region}</Text>
+                  <Text style={styles.sub}>
+                    {it.periodo} - {it.cliente} - {it.region}
+                  </Text>
                   <Text style={styles.sub}>Estado: {it.estado}</Text>
                 </View>
                 <View style={styles.right}>
-                  <Text style={styles.money}>Asignado: $ {Number(it.totalAsignado || 0).toLocaleString("es-CL")}</Text>
-                  <Text style={styles.money}>Rendido: $ {Number(it.totalRendido || 0).toLocaleString("es-CL")}</Text>
+                  <Text style={styles.money}>
+                    Asignado: $ {Number(it.totalAsignado || 0).toLocaleString("es-CL")}
+                  </Text>
+                  <Text style={styles.money}>
+                    Rendido: $ {Number(it.totalRendido || 0).toLocaleString("es-CL")}
+                  </Text>
                   <Text style={styles.sub}>Rendiciones: {it.cantidadRendiciones}</Text>
                 </View>
               </View>
             ))
-          )
-        )}
+          ))}
 
-        {tab === "periodos" && (
-          filteredPeriodos.length === 0 ? (
+        {tab === "periodos" &&
+          (filteredPeriodos.length === 0 ? (
             <Text style={styles.empty}>No hay periodos.</Text>
           ) : (
             filteredPeriodos.map((p) => (
               <View key={p.id} style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>{p.nombre}</Text>
-                  <Text style={styles.sub}>{String(p.fechaInicio).slice(0, 10)} - {String(p.fechaTermino).slice(0, 10)}</Text>
+                  <Text style={styles.sub}>
+                    {String(p.fechaInicio).slice(0, 10)} - {String(p.fechaTermino).slice(0, 10)}
+                  </Text>
                 </View>
                 <View style={styles.right}>
                   <Text style={styles.sub}>Activo: {p.activo ? "Si" : "No"}</Text>
                 </View>
               </View>
             ))
-          )
-        )}
+          ))}
 
-        {tab === "deudores" && (
-          deudores.length === 0 ? (
+        {tab === "deudores" &&
+          (deudores.length === 0 ? (
             <Text style={styles.empty}>No hay deudores.</Text>
           ) : (
             deudores.map((d, idx) => (
@@ -425,17 +421,22 @@ export default function ListadoAsignacionesSemanales({ token }) {
                   <Text style={styles.sub}>Rendiciones: {d.cantidad}</Text>
                 </View>
                 <View style={styles.right}>
-                  <Text style={styles.money}>Asignado: $ {Number(d.totalAsignado || 0).toLocaleString("es-CL")}</Text>
-                  <Text style={styles.money}>Rendido: $ {Number(d.totalRendido || 0).toLocaleString("es-CL")}</Text>
-                  <Text style={styles.sub}>Diferencia: $ {Number(d.diferencia || 0).toLocaleString("es-CL")}</Text>
+                  <Text style={styles.money}>
+                    Asignado: $ {Number(d.totalAsignado || 0).toLocaleString("es-CL")}
+                  </Text>
+                  <Text style={styles.money}>
+                    Rendido: $ {Number(d.totalRendido || 0).toLocaleString("es-CL")}
+                  </Text>
+                  <Text style={styles.sub}>
+                    Diferencia: $ {Number(d.diferencia || 0).toLocaleString("es-CL")}
+                  </Text>
                 </View>
               </View>
             ))
-          )
-        )}
+          ))}
 
-        {tab === "devoluciones" && (
-          devoluciones.length === 0 ? (
+        {tab === "devoluciones" &&
+          (devoluciones.length === 0 ? (
             <Text style={styles.empty}>No hay devoluciones.</Text>
           ) : (
             devoluciones.map((d, idx) => (
@@ -445,14 +446,19 @@ export default function ListadoAsignacionesSemanales({ token }) {
                   <Text style={styles.sub}>Rendiciones: {d.cantidad}</Text>
                 </View>
                 <View style={styles.right}>
-                  <Text style={styles.money}>Asignado: $ {Number(d.totalAsignado || 0).toLocaleString("es-CL")}</Text>
-                  <Text style={styles.money}>Rendido: $ {Number(d.totalRendido || 0).toLocaleString("es-CL")}</Text>
-                  <Text style={styles.sub}>Diferencia: $ {Number(d.diferencia || 0).toLocaleString("es-CL")}</Text>
+                  <Text style={styles.money}>
+                    Asignado: $ {Number(d.totalAsignado || 0).toLocaleString("es-CL")}
+                  </Text>
+                  <Text style={styles.money}>
+                    Rendido: $ {Number(d.totalRendido || 0).toLocaleString("es-CL")}
+                  </Text>
+                  <Text style={styles.sub}>
+                    Diferencia: $ {Number(d.diferencia || 0).toLocaleString("es-CL")}
+                  </Text>
                 </View>
               </View>
             ))
-          )
-        )}
+          ))}
       </Card>
     </ScrollView>
   );

@@ -1,9 +1,10 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
+import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, Pressable, Alert, StyleSheet } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
-import { Card, Col, Input, Label, Row, SectionTitle, Select } from "../components/UI";
+import { Card, Col, Input, Row, SectionTitle, Select } from "../components/UI";
 import {
   listarAsignacionesSemanales,
   crearAsignacionSemanal,
@@ -52,20 +53,7 @@ export default function AsignacionSemanal({ token }) {
     estado: "",
   });
 
-  const MONTHS = [
-    "Ene",
-    "Feb",
-    "Mar",
-    "Abr",
-    "May",
-    "Jun",
-    "Jul",
-    "Ago",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dic",
-  ];
+  const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
   const toDate = (value) => {
     if (!value) return null;
@@ -73,7 +61,7 @@ export default function AsignacionSemanal({ token }) {
     return Number.isNaN(d.getTime()) ? null : d;
   };
 
-  const loadCatalogos = async () => {
+  const loadCatalogos = useCallback(async () => {
     try {
       const [p, c, cl, r] = await Promise.all([
         fetch(`${API_BASE}/Periodos`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -88,9 +76,9 @@ export default function AsignacionSemanal({ token }) {
     } catch {
       // ignore
     }
-  };
+  }, [token]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const data = await listarAsignacionesSemanales(token);
       setItems(Array.isArray(data) ? data : []);
@@ -98,15 +86,18 @@ export default function AsignacionSemanal({ token }) {
     } catch (e) {
       setError(e?.message || "Error al cargar asignaciones.");
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     load();
     loadCatalogos();
-  }, [token]);
+  }, [load, loadCatalogos]);
 
   const setField = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
   const setFilter = (k, v) => setFilters((prev) => ({ ...prev, [k]: v }));
+  const clearFilters = () => {
+    setFilters({ periodoId: "", capacitadorId: "", estado: "" });
+  };
 
   const resetForm = () => {
     setEditing(null);
@@ -125,7 +116,7 @@ export default function AsignacionSemanal({ token }) {
       setError("Periodo, capacitador, cliente y region son obligatorios.");
       return;
     }
-    const periodoActivo = periodosItems.some((p) => String(p.value) === String(form.periodoId));
+    const periodoActivo = periodosActivosItems.some((p) => String(p.value) === String(form.periodoId));
     if (!periodoActivo) {
       setError("El periodo seleccionado no esta activo.");
       return;
@@ -190,9 +181,7 @@ export default function AsignacionSemanal({ token }) {
 
     const msg = "¿Eliminar asignacion semanal?";
     const proceed =
-      typeof window !== "undefined" && typeof window.confirm === "function"
-        ? window.confirm(msg)
-        : undefined;
+      typeof window !== "undefined" && typeof window.confirm === "function" ? window.confirm(msg) : undefined;
 
     if (proceed === false) return;
     if (proceed === undefined) {
@@ -226,7 +215,6 @@ export default function AsignacionSemanal({ token }) {
   const periodosItems = useMemo(
     () =>
       (Array.isArray(periodos) ? periodos : [])
-        .filter((p) => (p.activo ?? p.Activo) === true)
         .filter((p) => {
           const d = toDate(p.fechaInicio ?? p.FechaInicio);
           if (!d) return false;
@@ -235,9 +223,13 @@ export default function AsignacionSemanal({ token }) {
         .map((p) => ({
           label: formatPeriodoLabel(p),
           value: String(p.id ?? p.Id),
+          activo: (p.activo ?? p.Activo) === true,
         })),
     [periodos, selectedMonth, selectedYear]
   );
+
+  // Para crear nuevas asignaciones solo se muestran semanas activas.
+  const periodosActivosItems = useMemo(() => periodosItems.filter((p) => p.activo), [periodosItems]);
 
   const yearItems = useMemo(() => {
     const years = new Set();
@@ -280,15 +272,35 @@ export default function AsignacionSemanal({ token }) {
     [regiones]
   );
 
-  const getLabel = (items, value) =>
-    items.find((i) => String(i.value) === String(value))?.label || value;
+  const getLabel = (items, value) => items.find((i) => String(i.value) === String(value))?.label || value;
+
+  // Diccionario global para renderizar semana en el listado sin depender del filtro mensual.
+  const periodosLabelById = useMemo(() => {
+    const map = {};
+    (Array.isArray(periodos) ? periodos : []).forEach((p) => {
+      const id = String(p.id ?? p.Id ?? "");
+      if (!id) return;
+      map[id] = formatPeriodoLabel(p);
+    });
+    return map;
+  }, [periodos]);
+
+  useEffect(() => {
+    if (form.periodoId && !periodosItems.some((p) => String(p.value) === String(form.periodoId))) {
+      setForm((prev) => ({ ...prev, periodoId: "" }));
+    }
+    if (filters.periodoId && !periodosItems.some((p) => String(p.value) === String(filters.periodoId))) {
+      setFilters((prev) => ({ ...prev, periodoId: "" }));
+    }
+  }, [periodosItems, form.periodoId, filters.periodoId]);
 
   const filteredItems = useMemo(() => {
     return items.filter((it) => {
-      const periodoOk = !filters.periodoId
-        || String(it.periodoId ?? it.PeriodoId) === String(filters.periodoId);
-      const capOk = !filters.capacitadorId
-        || String(it.capacitadorId ?? it.CapacitadorId) === String(filters.capacitadorId);
+      const periodoOk =
+        !filters.periodoId || String(it.periodoId ?? it.PeriodoId) === String(filters.periodoId);
+      const capOk =
+        !filters.capacitadorId ||
+        String(it.capacitadorId ?? it.CapacitadorId) === String(filters.capacitadorId);
       const estadoVal = (it.estado ?? it.Estado ?? "").toString();
       const estadoOk = !filters.estado || estadoVal === filters.estado;
       return periodoOk && capOk && estadoOk;
@@ -331,7 +343,7 @@ export default function AsignacionSemanal({ token }) {
             <Select
               value={form.periodoId}
               onValueChange={(v) => setField("periodoId", v)}
-              items={[{ label: "Selecciona", value: "" }, ...periodosItems]}
+              items={[{ label: "Selecciona", value: "" }, ...periodosActivosItems]}
             />
           </Col>
           <Col>
@@ -386,9 +398,20 @@ export default function AsignacionSemanal({ token }) {
           </Col>
         </Row>
 
-        <Pressable style={dash.saveBtn} onPress={onSave}>
-          <Text style={dash.saveText}>{loading ? "Guardando..." : "Guardar"}</Text>
-        </Pressable>
+        <View style={styles.formActions}>
+          <Pressable style={[dash.saveBtn, styles.formPrimaryBtn]} onPress={onSave}>
+            <Text style={dash.saveText}>{loading ? "Guardando..." : "Guardar"}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.formClearBtn}
+            onPress={() => {
+              resetForm();
+              setError("");
+            }}
+          >
+            <Text style={styles.formClearBtnText}>Limpiar formulario</Text>
+          </Pressable>
+        </View>
         {!!error && <Text style={{ marginTop: 8, color: COLORS.muted, fontWeight: "700" }}>{error}</Text>}
       </Card>
 
@@ -426,6 +449,11 @@ export default function AsignacionSemanal({ token }) {
             />
           </Col>
         </Row>
+        <View style={styles.filterActions}>
+          <Pressable style={styles.clearBtn} onPress={clearFilters}>
+            <Text style={styles.clearBtnText}>Limpiar filtros</Text>
+          </Pressable>
+        </View>
       </Card>
 
       <SectionTitle title="Listado" />
@@ -436,12 +464,20 @@ export default function AsignacionSemanal({ token }) {
           <View key={it.id} style={styles.listRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.listTitle}>Id: {it.id}</Text>
-              <Text style={styles.listSub}>Semana: {getLabel(periodosItems, it.periodoId ?? it.PeriodoId)}</Text>
+              <Text style={styles.listSub}>
+                Semana:{" "}
+                {periodosLabelById[String(it.periodoId ?? it.PeriodoId)] ||
+                  String(it.periodoId ?? it.PeriodoId)}
+              </Text>
               <Text style={styles.listSub}>
                 Capacitador: {getLabel(capacitadoresItems, it.capacitadorId ?? it.CapacitadorId)}
               </Text>
-              <Text style={styles.listSub}>Cliente: {getLabel(clientesItems, it.clienteId ?? it.ClienteId)}</Text>
-              <Text style={styles.listSub}>Region: {getLabel(regionesItems, it.regionId ?? it.RegionId)}</Text>
+              <Text style={styles.listSub}>
+                Cliente: {getLabel(clientesItems, it.clienteId ?? it.ClienteId)}
+              </Text>
+              <Text style={styles.listSub}>
+                Region: {getLabel(regionesItems, it.regionId ?? it.RegionId)}
+              </Text>
               <Text style={styles.listSub}>Estado: {it.estado ?? it.Estado}</Text>
             </View>
             <View style={styles.actions}>
@@ -466,6 +502,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
     marginVertical: 10,
   },
+  formActions: { marginTop: 6, gap: 8 },
+  formPrimaryBtn: { marginTop: 0 },
+  formClearBtn: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#EEF3FF",
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+  },
+  formClearBtnText: { fontWeight: "800", color: COLORS.blue2 },
   formLabel: { marginBottom: 6, color: COLORS.text, fontWeight: "700" },
   filterCard: { marginBottom: 16 },
   filterTitle: { fontSize: 16, fontWeight: "800", color: COLORS.text },
@@ -475,6 +523,16 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   filterRow: { alignItems: "flex-start" },
+  filterActions: { marginTop: 10, alignItems: "flex-start" },
+  clearBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#EEF3FF",
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+  },
+  clearBtnText: { fontWeight: "800", color: COLORS.blue2 },
   filterLabel: { marginBottom: 6, color: COLORS.text, fontWeight: "700" },
   monthRow: {
     flexDirection: "row",
@@ -526,10 +584,3 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
-
-
-
-
-
-
-

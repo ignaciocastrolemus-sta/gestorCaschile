@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
+import { useState } from "react";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -7,10 +8,12 @@ import ContadoraRendiciones from "./ContadoraRendiciones";
 
 // Contadora: revisión de rendiciones
 export default function ContadoraHome({ onLogout, token, embedded = false }) {
+  const [activeMenu, setActiveMenu] = useState("rendiciones");
+
   if (embedded) {
     return (
       <View style={dash.content}>
-        <ContadoraRendiciones token={token} />
+        <ContadoraRendiciones token={token} viewMode="rendiciones" />
       </View>
     );
   }
@@ -40,11 +43,20 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
           </View>
 
           <Text style={dash.menuTitle}>OPCIONES</Text>
-          <MenuItem label="Rendiciones" active onPress={() => {}} />
+          <MenuItem
+            label="Rendiciones"
+            active={activeMenu === "rendiciones"}
+            onPress={() => setActiveMenu("rendiciones")}
+          />
+          <MenuItem
+            label="Saldos"
+            active={activeMenu === "saldos"}
+            onPress={() => setActiveMenu("saldos")}
+          />
         </View>
 
         <View style={dash.content}>
-          <ContadoraRendiciones token={token} />
+          <ContadoraRendiciones token={token} viewMode={activeMenu === "saldos" ? "saldos" : "rendiciones"} />
         </View>
       </View>
     </View>

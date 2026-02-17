@@ -11,9 +11,11 @@ import CapacitadorCarpeta from "./CapacitadorCarpeta";
 export default function CapacitadorHome({ onLogout, token, embedded = false }) {
   const [activeMenu, setActiveMenu] = useState("rendicion");
   const [selectedViajeId, setSelectedViajeId] = useState(null);
+  const [rendicionContext, setRendicionContext] = useState(null);
 
-  const handleIrRendicion = (viajeId) => {
+  const handleIrRendicion = (viajeId, context = null) => {
     if (viajeId) setSelectedViajeId(viajeId);
+    setRendicionContext(context);
     setActiveMenu("rendicion");
   };
 
@@ -23,7 +25,11 @@ export default function CapacitadorHome({ onLogout, token, embedded = false }) {
         {activeMenu === "carpeta" ? (
           <CapacitadorCarpeta token={token} onIrRendicion={handleIrRendicion} />
         ) : (
-          <CapacitadorRendicion token={token} selectedViajeId={selectedViajeId} />
+          <CapacitadorRendicion
+            token={token}
+            selectedViajeId={selectedViajeId}
+            selectedContext={rendicionContext}
+          />
         )}
       </View>
     );
@@ -74,7 +80,11 @@ export default function CapacitadorHome({ onLogout, token, embedded = false }) {
           {activeMenu === "carpeta" ? (
             <CapacitadorCarpeta token={token} onIrRendicion={handleIrRendicion} />
           ) : (
-            <CapacitadorRendicion token={token} selectedViajeId={selectedViajeId} />
+            <CapacitadorRendicion
+              token={token}
+              selectedViajeId={selectedViajeId}
+              selectedContext={rendicionContext}
+            />
           )}
         </View>
       </View>

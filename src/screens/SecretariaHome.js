@@ -235,8 +235,8 @@ export default function SecretariaHome({ onLogout, token, embedded = false }) {
                   {!!item.datosViaje && <Text style={styles.listItemSub}>Viaje: {item.datosViaje}</Text>}
                   {!!item.asignacionDia && !!item.dias && (
                     <Text style={styles.listItemSub}>
-                      Asignacion: ${Number(item.asignacionDia).toLocaleString("es-CL")} x{" "}
-                      {item.dias} = ${Number(item.asignacionTotal).toLocaleString("es-CL")}
+                      Asignacion: ${Number(item.asignacionDia).toLocaleString("es-CL")} x {item.dias} = $
+                      {Number(item.asignacionTotal).toLocaleString("es-CL")}
                     </Text>
                   )}
                   {!!item.gastoManual && (
@@ -245,9 +245,7 @@ export default function SecretariaHome({ onLogout, token, embedded = false }) {
                     </Text>
                   )}
                 </View>
-                <Text style={styles.listItemAmount}>
-                  ${Number(item.monto).toLocaleString("es-CL")}
-                </Text>
+                <Text style={styles.listItemAmount}>${Number(item.monto).toLocaleString("es-CL")}</Text>
               </View>
             ))
           )}

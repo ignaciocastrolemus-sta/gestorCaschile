@@ -3,7 +3,6 @@ import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { COLORS } from "../constants/colors";
 
-
 // Componentes UI base (Card, Label, Input, Select, etc.)
 
 export function SectionTitle({ title, subtitle }) {

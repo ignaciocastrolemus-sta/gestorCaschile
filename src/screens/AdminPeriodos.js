@@ -1,8 +1,11 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
+import PageHeader from "../components/PageHeader";
+import KpiRow from "../components/KpiRow";
 
 // Admin Periodos: CRUD de periodos semanales
 export default function AdminPeriodos({ token }) {
@@ -18,7 +21,43 @@ export default function AdminPeriodos({ token }) {
     activo: true,
   });
 
-  const load = async () => {
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+  const toDate = (value) => {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const filteredItems = useMemo(() => {
+    return (Array.isArray(items) ? items : []).filter((p) => {
+      const d = toDate(p.fechaInicio ?? p.FechaInicio);
+      if (!d) return false;
+      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+    });
+  }, [items, selectedMonth, selectedYear]);
+
+  const summary = useMemo(() => {
+    const total = filteredItems.length;
+    const activas = filteredItems.filter((p) => Boolean(p.activo ?? p.Activo)).length;
+    const inactivas = total - activas;
+    return { total, activas, inactivas };
+  }, [filteredItems]);
+  const globalSummary = useMemo(() => {
+    const total = items.length;
+    const activas = items.filter((p) => Boolean(p.activo ?? p.Activo)).length;
+    const inactivas = total - activas;
+    const anios = new Set(
+      items.map((p) => String(p.fechaInicio || "").slice(0, 4)).filter((v) => v && v !== "0001")
+    ).size;
+    return { total, activas, inactivas, anios };
+  }, [items]);
+
+  const load = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/Periodos`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -30,11 +69,11 @@ export default function AdminPeriodos({ token }) {
     } catch (e) {
       setError(e?.message || "Error al cargar periodos.");
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     load();
-  }, [token]);
+  }, [load]);
 
   const setField = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
 
@@ -63,9 +102,7 @@ export default function AdminPeriodos({ token }) {
         diasLimiteRendicion: Number(form.diasLimiteRendicion),
         activo: form.activo,
       };
-      const url = editing
-        ? `${API_BASE}/Periodos/${editing.id}`
-        : `${API_BASE}/Periodos`;
+      const url = editing ? `${API_BASE}/Periodos/${editing.id}` : `${API_BASE}/Periodos`;
       const method = editing ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -145,8 +182,27 @@ export default function AdminPeriodos({ token }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-      <Text style={dash.h1}>Periodos</Text>
-      <Text style={dash.h2}>Mantenedor de periodos semanales.</Text>
+      <PageHeader
+        title="Periodos"
+        subtitle="Mantenedor de periodos semanales."
+        secondaryLabel="Actualizar"
+        onSecondaryPress={load}
+        primaryLabel="Limpiar formulario"
+        onPrimaryPress={resetForm}
+      />
+      <KpiRow
+        items={[
+          { key: "total", label: "Total semanas", value: globalSummary.total },
+          { key: "activas", label: "Semanas activas", value: globalSummary.activas, valueColor: "#0D8A42" },
+          {
+            key: "inactivas",
+            label: "Semanas inactivas",
+            value: globalSummary.inactivas,
+            valueColor: "#C2410C",
+          },
+          { key: "anios", label: "Años cargados", value: globalSummary.anios },
+        ]}
+      />
 
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>{editing ? "Editar periodo" : "Nuevo periodo"}</Text>
@@ -231,31 +287,80 @@ export default function AdminPeriodos({ token }) {
       </View>
 
       <View style={dash.panel}>
-        <Text style={dash.panelTitle}>Listado</Text>
-        {items.length === 0 ? (
-          <Text style={styles.empty}>No hay periodos.</Text>
-        ) : (
-          items.map((p) => (
-            <View key={p.id} style={styles.listRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.listTitle}>{p.nombre}</Text>
-                <Text style={styles.listSub}>Inicio: {String(p.fechaInicio).slice(0, 10)}</Text>
-                <Text style={styles.listSub}>Termino: {String(p.fechaTermino).slice(0, 10)}</Text>
-                <Text style={styles.listSub}>Dias limite: {p.diasLimiteRendicion}</Text>
-              </View>
-              <View style={styles.listRight}>
-                <Text style={styles.badge}>{p.activo ? "Activo" : "Inactivo"}</Text>
-                <View style={styles.actions}>
-                  <Pressable style={styles.smallBtn} onPress={() => onEdit(p)}>
-                    <Text style={styles.smallBtnText}>Editar</Text>
-                  </Pressable>
-                  <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(p)}>
-                    <Text style={styles.smallBtnText}>Eliminar</Text>
-                  </Pressable>
-                </View>
-              </View>
+        <Text style={dash.panelTitle}>Periodos por mes</Text>
+        <View style={styles.monthWrap}>
+          <Text style={styles.monthTitle}>Mes</Text>
+          <View style={styles.monthRow}>
+            {MONTHS.map((m, idx) => (
+              <Pressable
+                key={m}
+                style={[styles.monthChip, selectedMonth === idx && styles.monthChipActive]}
+                onPress={() => setSelectedMonth(idx)}
+              >
+                <Text style={[styles.monthText, selectedMonth === idx && styles.monthTextActive]}>{m}</Text>
+              </Pressable>
+            ))}
+            <View style={styles.yearControl}>
+              <Pressable style={styles.yearBtn} onPress={() => setSelectedYear((y) => y - 1)}>
+                <Text style={styles.yearBtnText}>-</Text>
+              </Pressable>
+              <Text style={styles.yearValue}>{selectedYear}</Text>
+              <Pressable style={styles.yearBtn} onPress={() => setSelectedYear((y) => y + 1)}>
+                <Text style={styles.yearBtnText}>+</Text>
+              </Pressable>
             </View>
-          ))
+          </View>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Semanas</Text>
+              <Text style={styles.summaryValue}>{summary.total}</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Activas</Text>
+              <Text style={styles.summaryValue}>{summary.activas}</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Inactivas</Text>
+              <Text style={styles.summaryValue}>{summary.inactivas}</Text>
+            </View>
+          </View>
+        </View>
+
+        {filteredItems.length === 0 ? (
+          <Text style={styles.empty}>No hay semanas para este mes.</Text>
+        ) : (
+          <View style={styles.cardsGrid}>
+            {filteredItems.map((p) => {
+              const fi = String(p.fechaInicio).slice(0, 10);
+              const ft = String(p.fechaTermino).slice(0, 10);
+              return (
+                <View key={p.id} style={styles.weekCard}>
+                  <View style={styles.weekHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.weekTitle}>{p.nombre}</Text>
+                      <Text style={styles.weekSub}>
+                        {fi} - {ft}
+                      </Text>
+                    </View>
+                    <View
+                      style={[styles.statusBadge, p.activo ? styles.statusActive : styles.statusInactive]}
+                    >
+                      <Text style={styles.statusText}>{p.activo ? "Activa" : "Inactiva"}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.weekMeta}>Dias limite: {p.diasLimiteRendicion}</Text>
+                  <View style={styles.actions}>
+                    <Pressable style={styles.smallBtn} onPress={() => onEdit(p)}>
+                      <Text style={styles.smallBtnText}>Editar</Text>
+                    </Pressable>
+                    <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(p)}>
+                      <Text style={styles.smallBtnText}>Eliminar</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         )}
       </View>
     </ScrollView>
@@ -298,27 +403,76 @@ const styles = StyleSheet.create({
   secondaryText: { color: COLORS.blue2, fontWeight: "900" },
   error: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "800" },
-  listRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayBorder,
+  monthWrap: { marginBottom: 12 },
+  monthTitle: { fontWeight: "900", color: COLORS.text, marginBottom: 8 },
+  monthRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
+  monthChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    backgroundColor: "#fff",
   },
-  listTitle: { fontWeight: "800", color: COLORS.text },
-  listSub: { marginTop: 2, color: COLORS.muted, fontWeight: "700" },
-  listRight: { alignItems: "flex-end", gap: 8 },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+  monthChipActive: { backgroundColor: COLORS.blue2, borderColor: COLORS.blue2 },
+  monthText: { fontWeight: "900", color: COLORS.text },
+  monthTextActive: { color: "#fff" },
+  yearControl: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    backgroundColor: "#fff",
+  },
+  yearBtn: {
+    width: 28,
+    height: 28,
     borderRadius: 999,
     backgroundColor: "#EEF3FF",
     borderWidth: 1,
     borderColor: "#D9E5FF",
-    fontWeight: "900",
-    color: COLORS.text,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  yearBtnText: { fontWeight: "900", color: COLORS.blue2 },
+  yearValue: { fontWeight: "900", color: COLORS.text },
+  summaryRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: "#F7FAFF",
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 12,
+    padding: 10,
+  },
+  summaryLabel: { fontWeight: "800", color: COLORS.muted, fontSize: 12 },
+  summaryValue: { fontWeight: "900", color: COLORS.text, fontSize: 18, marginTop: 4 },
+  cardsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  weekCard: {
+    width: 320,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    padding: 12,
+  },
+  weekHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  weekTitle: { fontWeight: "900", color: COLORS.text },
+  weekSub: { marginTop: 4, color: COLORS.muted, fontWeight: "700" },
+  weekMeta: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusActive: { backgroundColor: "#E7F8ED", borderColor: "#BFE8CB" },
+  statusInactive: { backgroundColor: "#FFEFEF", borderColor: "#F3B6B6" },
+  statusText: { fontWeight: "900", color: COLORS.text },
   actions: { flexDirection: "row", gap: 8 },
   smallBtn: {
     paddingVertical: 6,
@@ -338,6 +492,3 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
-
-
-

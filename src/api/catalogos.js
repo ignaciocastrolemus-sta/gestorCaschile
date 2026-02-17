@@ -8,32 +8,43 @@ async function fetchJson(url, token) {
   return await res.json();
 }
 
-// CatÃ¡logo: regiones
+function isActivo(row) {
+  // Compat: si backend aun no tiene Activo, consideramos activo por defecto.
+  const raw = row?.activo ?? row?.Activo;
+  return raw === undefined ? true : Boolean(raw);
+}
+
+function filtrarActivos(data) {
+  return Array.isArray(data) ? data.filter(isActivo) : data;
+}
+
+// Catalogo: regiones
 export async function obtenerRegiones(token) {
-  return await fetchJson(`${API_BASE}/Regiones`, token);
+  const data = await fetchJson(`${API_BASE}/Regiones`, token);
+  return filtrarActivos(data);
 }
 
-// CatÃ¡logo: comunas
+// Catalogo: comunas
 export async function obtenerComunas(token) {
-  return await fetchJson(`${API_BASE}/Comunas`, token);
+  const data = await fetchJson(`${API_BASE}/Comunas`, token);
+  return filtrarActivos(data);
 }
 
-// CatÃ¡logo: capacitadores
+// Catalogo: capacitadores
 export async function obtenerCapacitadores(token) {
-  return await fetchJson(`${API_BASE}/Capacitadores`, token);
+  const data = await fetchJson(`${API_BASE}/Capacitadores`, token);
+  return filtrarActivos(data);
 }
 
-// CatÃ¡logo: jefes de proyecto
+// Catalogo: jefes de proyecto
 export async function obtenerJefesProyecto(token) {
-  return await fetchJson(`${API_BASE}/JefesProyecto`, token);
+  const data = await fetchJson(`${API_BASE}/JefesProyecto`, token);
+  return filtrarActivos(data);
 }
 
-// CatÃ¡logo: municipios por regiÃ³n
+// Catalogo: municipios por region
 export async function obtenerMunicipios(regionId, token) {
   const params = regionId ? `?region=${encodeURIComponent(regionId)}` : "";
-  return await fetchJson(`${API_BASE}/Municipios${params}`, token);
+  const data = await fetchJson(`${API_BASE}/Municipios${params}`, token);
+  return filtrarActivos(data);
 }
-
-
-
-
