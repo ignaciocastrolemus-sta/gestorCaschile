@@ -23,13 +23,13 @@ export default function useSecretariaForm(authToken) {
   const lastMontosKey = useRef("");
   const montosAbortRef = useRef(null);
 
-  const emptyForm = {
+  const buildEmptyForm = (tipo = "santiago") => ({
     fecha: formatFechaHoy(),
     fechaInicio: formatFechaHoy(),
     fechaTermino: formatFechaHoy(),
     capacitador: "",
     jefe: "",
-    region: "Metropolitana de Santiago",
+    region: tipo === "santiago" ? "Metropolitana de Santiago" : "",
     comuna: "",
     modalidad: "",
     dias: "",
@@ -50,8 +50,17 @@ export default function useSecretariaForm(authToken) {
     reembolsos: "",
     varios: "",
     copec: "",
-  };
-  const [form, setForm] = useState({ ...emptyForm });
+  });
+  const [form, setForm] = useState(() => buildEmptyForm("santiago"));
+
+  // Limpia montos dependientes de la tarifa seleccionada (region/comuna).
+  const limpiarMontosTarifa = (base) => ({
+    desayuno: base.noDesayuno ? "0" : "",
+    almuerzo: base.noAlmuerzo ? "0" : "",
+    once: base.noOnce ? "0" : "",
+    cena: base.noCena ? "0" : "",
+    viatico: base.noViatico ? "0" : "",
+  });
 
   const isValidFecha = (value) => !!parseFecha(value);
 
@@ -101,6 +110,17 @@ export default function useSecretariaForm(authToken) {
   const updateFormConFechas = (campo, value) => {
     setForm((prev) => {
       const next = { ...prev, [campo]: value };
+      if (campo === "region" && value !== prev.region) {
+        next.comuna = "";
+        Object.assign(next, limpiarMontosTarifa(next));
+        lastMontosKey.current = "";
+        if (montosAbortRef.current) montosAbortRef.current.abort();
+      }
+      if (campo === "comuna" && value !== prev.comuna) {
+        Object.assign(next, limpiarMontosTarifa(next));
+        lastMontosKey.current = "";
+        if (montosAbortRef.current) montosAbortRef.current.abort();
+      }
       if (campo === "fechaInicio" || campo === "dias") {
         next.fechaTermino = calcularFechaTermino(next.fechaInicio, next.dias);
       }
@@ -172,6 +192,9 @@ export default function useSecretariaForm(authToken) {
       await crearViaje(payload, authToken);
       Alert.alert("Guardado", "Datos guardados.");
       setSaveMsg("Guardado.");
+      setForm(buildEmptyForm(tipoViaje));
+      lastMontosKey.current = "";
+      if (montosAbortRef.current) montosAbortRef.current.abort();
     } catch (error) {
       Alert.alert("Error", error?.message || "No se pudo guardar.");
       setSaveMsg("Error al guardar.");
@@ -190,7 +213,9 @@ export default function useSecretariaForm(authToken) {
   const resetSecretaria = () => {
     setActiveMenu("gasto");
     setTipoViaje("santiago");
-    setForm({ ...emptyForm });
+    setForm(buildEmptyForm("santiago"));
+    lastMontosKey.current = "";
+    if (montosAbortRef.current) montosAbortRef.current.abort();
   };
 
   const diasHabiles = contarDiasHabiles(

@@ -27,6 +27,7 @@ export default function App() {
     forceConfirm,
     forceMsg,
     setEmail,
+    onEmailInputChange,
     setPass,
     setShowReset,
     setResetEmail,
@@ -103,6 +104,7 @@ export default function App() {
       email={email}
       pass={pass}
       setEmail={setEmail}
+      onEmailInputChange={onEmailInputChange}
       setPass={setPass}
       onLogin={onLogin}
       showReset={showReset}

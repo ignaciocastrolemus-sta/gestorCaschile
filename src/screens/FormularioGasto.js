@@ -233,7 +233,9 @@ export default function FormularioGasto({
     r.toLowerCase().includes((form.region || "").toLowerCase())
   );
 
-  const comunas = comunasPorRegion[form.region] || [];
+  const regionSeleccionada = (form.region || "").trim().toLowerCase();
+  const regionKey = Object.keys(comunasPorRegion).find((key) => key.toLowerCase() === regionSeleccionada);
+  const comunas = regionKey ? comunasPorRegion[regionKey] : [];
   const municipiosDisponibles = municipios.length > 0 ? municipios : comunas;
   const comunasFiltradas = municipiosDisponibles.filter((c) =>
     c.toLowerCase().includes((form.comuna || "").toLowerCase())

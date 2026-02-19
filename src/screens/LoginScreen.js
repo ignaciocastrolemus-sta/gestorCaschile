@@ -7,6 +7,7 @@ export default function LoginScreen({
   email,
   pass,
   setEmail,
+  onEmailInputChange,
   setPass,
   onLogin,
   showReset,
@@ -55,10 +56,14 @@ export default function LoginScreen({
             <Text style={styles.label}>Correo</Text>
             <TextInput
               value={email}
-              onChangeText={setEmail}
+              onChangeText={onEmailInputChange || setEmail}
               placeholder="correo@empresa.cl"
               placeholderTextColor={COLORS.muted}
               autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              keyboardType="email-address"
               style={styles.input}
             />
 
@@ -125,6 +130,10 @@ export default function LoginScreen({
               placeholder="correo@empresa.cl"
               placeholderTextColor={COLORS.muted}
               autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              keyboardType="email-address"
               style={styles.input}
             />
             <Pressable style={styles.secondaryBtn} onPress={onRequestReset}>

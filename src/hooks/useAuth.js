@@ -295,6 +295,17 @@ export default function useAuth() {
     }
   }, [isRoleAllowed, scheduleAutoLogout]);
 
+  // Evita artefactos de input en web (duplicacion por autofill/composicion).
+  const onEmailInputChange = useCallback((raw) => {
+    const next = String(raw || "").replace(/\s+/g, "");
+    setEmail((prev) => {
+      if (!prev || next.length < prev.length) return next;
+      const doubled = prev + prev;
+      if (next === doubled) return prev;
+      return next;
+    });
+  }, []);
+
   return {
     isAuth,
     authToken,
@@ -313,6 +324,7 @@ export default function useAuth() {
     forceConfirm,
     forceMsg,
     setEmail,
+    onEmailInputChange,
     setPass,
     setShowReset,
     setResetEmail,
