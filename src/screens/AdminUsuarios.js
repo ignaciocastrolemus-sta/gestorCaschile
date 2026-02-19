@@ -2,6 +2,7 @@
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { bajaSeguraUsuario, buildAnonUserView } from "../api/usuarios";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Picker } from "@react-native-picker/picker";
@@ -46,6 +47,7 @@ export default function AdminUsuarios({ token, title }) {
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filtroListado, setFiltroListado] = useState("activos");
@@ -151,6 +153,16 @@ export default function AdminUsuarios({ token, title }) {
   };
 
   const normalizeRut = (value) => value.replace(/[^0-9kK]/g, "").toUpperCase();
+  const isUsuarioAnonimizado = (u) =>
+    Boolean(u?.anonimizado) || String(u?.nombre || "").startsWith("ANON_") || String(u?.email || "").includes("@anon.local");
+
+  const askMotivoBaja = () => {
+    if (typeof window !== "undefined" && typeof window.prompt === "function") {
+      return (window.prompt("Motivo de baja segura", "Desvinculacion laboral") || "").trim();
+    }
+    return "Desvinculacion laboral";
+  };
+
   const validarRut = (rut) => {
     const clean = normalizeRut(rut);
     if (clean.length < 8) return false;
@@ -168,6 +180,7 @@ export default function AdminUsuarios({ token, title }) {
   };
 
   const onSave = async () => {
+    setInfo("");
     if (!form.nombre.trim() || !form.email.trim()) {
       setError("Nombre y email son obligatorios.");
       return;
@@ -234,6 +247,7 @@ export default function AdminUsuarios({ token, title }) {
       if (!res.ok) throw new Error(await res.text());
       resetForm();
       load();
+      setInfo(editing ? "Usuario actualizado." : "Usuario creado.");
     } catch (e) {
       setError(e?.message || "Error al guardar.");
     } finally {
@@ -242,6 +256,11 @@ export default function AdminUsuarios({ token, title }) {
   };
 
   const onEdit = (u) => {
+    if (isUsuarioAnonimizado(u)) {
+      setError("Usuario anonimizado: no se puede editar.");
+      return;
+    }
+    setInfo("");
     setEditing(u);
     setForm({
       nombre: u.nombre || "",
@@ -257,27 +276,32 @@ export default function AdminUsuarios({ token, title }) {
     });
   };
 
-  // En backend, DELETE realiza baja logica (Activo = 0).
   const onDeleteAccount = async (u) => {
+    setError("");
+    setInfo("");
     const confirmar = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/Usuarios/${u.id}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error(await res.text());
+        const motivo = askMotivoBaja();
+        if (!motivo) return;
+        const result = await bajaSeguraUsuario(token, u.id, motivo);
         if (editing?.id === u.id) resetForm();
-        // Refleja al instante la baja logica en el listado.
-        setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, activo: false } : x)));
+        setUsuarios((prev) =>
+          prev.map((x) => (x.id === u.id ? (result.mode === "secure" ? buildAnonUserView(x) : { ...x, activo: false }) : x))
+        );
+        setInfo(
+          result.mode === "secure"
+            ? "Usuario dado de baja y anonimizado."
+            : "Usuario desactivado. Backend aun no expone baja-segura."
+        );
       } catch (e) {
-        setError(e?.message || "No se pudo eliminar la cuenta.");
+        setError(e?.message || "No se pudo aplicar baja segura.");
       } finally {
         setLoading(false);
       }
     };
 
-    const msg = `¿Eliminar cuenta de ${u.email}?`;
+    const msg = `¿Aplicar baja segura a ${u.email}?\\nDesactiva la cuenta y elimina datos personales.`;
     const canUseWindowConfirm = typeof window !== "undefined" && typeof window.confirm === "function";
     if (canUseWindowConfirm) {
       const ok = window.confirm(msg);
@@ -286,9 +310,9 @@ export default function AdminUsuarios({ token, title }) {
       return;
     }
 
-    Alert.alert("Eliminar cuenta", msg, [
+    Alert.alert("Baja segura", msg, [
       { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: confirmar },
+      { text: "Confirmar", style: "destructive", onPress: confirmar },
     ]);
   };
 
@@ -478,6 +502,7 @@ export default function AdminUsuarios({ token, title }) {
           )}
         </View>
         {!!error && <Text style={styles.error}>{error}</Text>}
+        {!!info && <Text style={styles.info}>{info}</Text>}
       </View>
 
       <View style={dash.panel}>
@@ -527,10 +552,11 @@ export default function AdminUsuarios({ token, title }) {
         ) : (
           <View style={styles.gridList}>
             {pagedUsuarios.map((u) => (
-              <View key={u.id} style={styles.card}>
+                <View key={u.id} style={styles.card}>
                 <View style={styles.cardLeft}>
                   <Text style={styles.cardTitle}>{u.nombre}</Text>
                   <Text style={styles.cardSub}>{u.email}</Text>
+                  {isUsuarioAnonimizado(u) ? <Text style={styles.anonTag}>Cuenta anonimizada</Text> : null}
                   <View style={styles.metaRow}>
                     <View style={styles.badge}>
                       <Text style={styles.badgeText}>{u.rolNombre || "Sin rol"}</Text>
@@ -551,7 +577,7 @@ export default function AdminUsuarios({ token, title }) {
                     <Text style={styles.smallBtnText}>Editar</Text>
                   </Pressable>
                   <Pressable style={styles.smallBtnDanger} onPress={() => onDeleteAccount(u)}>
-                    <Text style={styles.smallBtnText}>Eliminar cuenta</Text>
+                    <Text style={styles.smallBtnText}>Baja segura</Text>
                   </Pressable>
                 </View>
               </View>
@@ -641,6 +667,7 @@ const styles = StyleSheet.create({
   },
   secondaryText: { color: COLORS.blue2, fontWeight: "900" },
   error: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
+  info: { marginTop: 8, color: "#0D8A42", fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "800" },
   listHeader: { marginBottom: 6 },
   listHint: { color: COLORS.muted, fontWeight: "700", marginTop: 4 },
@@ -671,6 +698,7 @@ const styles = StyleSheet.create({
   cardLeft: { flex: 1, paddingRight: 10 },
   cardTitle: { fontWeight: "900", color: COLORS.text, fontSize: 15 },
   cardSub: { marginTop: 2, color: COLORS.muted, fontWeight: "700" },
+  anonTag: { marginTop: 6, color: "#C2410C", fontWeight: "900", fontSize: 12 },
   metaRow: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" },
   badge: {
     paddingHorizontal: 10,

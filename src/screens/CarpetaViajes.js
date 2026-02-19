@@ -1,12 +1,14 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import { isSaldoRendicionValida, normalizeText, resolveSaldoEstado, resolveTipoResultado } from "../utils/saldoUtils";
 import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
 import { obtenerSaldoMovimientos } from "../api/rendiciones";
+import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
 
 // Secretaria: rendiciones recibidas y envio a contadora.
 export default function CarpetaViajes({ token, viewMode = "all" }) {
@@ -29,6 +31,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const [historyOpenByCap, setHistoryOpenByCap] = useState({});
   const [expandedCaps, setExpandedCaps] = useState({});
   const [visibleGroups, setVisibleGroups] = useState(6);
+  const [historialMes, setHistorialMes] = useState("todos");
 
   const totalAsignado = items.reduce((acc, it) => acc + Number(it.totalAsignado || 0), 0);
   const totalRendido = items.reduce((acc, it) => acc + Number(it.totalRendido || 0), 0);
@@ -277,27 +280,95 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     return { count, monto, montoFavor, montoContra };
   }, [saldosFiltrados]);
 
-  // Historial corto para secretaria: control de saldos ya cerrados.
-  const saldosCerradosRecientes = useMemo(() => {
+  const saldosCerrados = useMemo(() => {
     return (saldos || [])
       .filter((r) => isSaldoRendicionValida(r) && resolveSaldoEstado(r) === "Cerrado")
       .sort((a, b) => {
         const fa = new Date(a?.saldoCerradoEn || a?.fechaEnvio || 0).getTime();
         const fb = new Date(b?.saldoCerradoEn || b?.fechaEnvio || 0).getTime();
         return fb - fa;
-      })
-      .slice(0, 8);
+      });
   }, [saldos]);
+
+  const historialMesOptions = useMemo(() => {
+    const unique = new Map();
+    saldosCerrados.forEach((r) => {
+      const key = resolveMonthKey(r?.saldoCerradoEn || r?.fechaEnvio);
+      if (!key) return;
+      unique.set(key, resolveMonthLabel(key));
+    });
+    return [{ value: "todos", label: "Todos los meses" }].concat(
+      Array.from(unique.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([value, label]) => ({ value, label }))
+    );
+  }, [saldosCerrados]);
+
+  const saldosCerradosFiltrados = useMemo(() => {
+    if (historialMes === "todos") return saldosCerrados;
+    return saldosCerrados.filter((r) => resolveMonthKey(r?.saldoCerradoEn || r?.fechaEnvio) === historialMes);
+  }, [saldosCerrados, historialMes]);
 
   const historialPorCapacitador = useMemo(() => {
     const map = new Map();
-    saldosCerradosRecientes.forEach((r) => {
+    saldosCerradosFiltrados.forEach((r) => {
       const cap = r?.viaje?.capacitador || "Sin nombre";
       if (!map.has(cap)) map.set(cap, []);
       map.get(cap).push(r);
     });
     return Array.from(map.entries()).map(([capacitador, rows]) => ({ capacitador, rows }));
-  }, [saldosCerradosRecientes]);
+  }, [saldosCerradosFiltrados]);
+
+  const exportSummary = useMemo(() => {
+    const total = saldosCerradosFiltrados.length;
+    const favor = saldosCerradosFiltrados
+      .filter((r) => resolveTipoResultado(r) === "Reembolso")
+      .reduce((acc, r) => acc + resolveMontoSaldo(r), 0);
+    const contra = saldosCerradosFiltrados
+      .filter((r) => resolveTipoResultado(r) === "Devolucion")
+      .reduce((acc, r) => acc + resolveMontoSaldo(r), 0);
+    return { total, favor, contra };
+  }, [saldosCerradosFiltrados]);
+
+  const onExportHistorial = useCallback(
+    (type) => {
+      const rows = saldosCerradosFiltrados.map((r) => {
+        const tipo = resolveTipoResultado(r);
+        return [
+          { value: formatFechaCorta(r?.saldoCerradoEn || r?.fechaEnvio) },
+          { value: r.id },
+          { value: r?.viaje?.capacitador || "-" },
+          { value: r?.viaje?.municipio || "-" },
+          { value: r?.viaje?.regionNombre || "-" },
+          { value: tipo },
+          { value: `$ ${resolveMontoSaldo(r).toLocaleString("es-CL")}`, align: "right" },
+          { value: resolveSaldoEstado(r) },
+        ];
+      });
+      const mesLabel = historialMes === "todos" ? "Todos los meses" : resolveMonthLabel(historialMes);
+      const config = {
+        title: "Historial de saldos cerrados",
+        subtitle: "Secretaria - Rendiciones",
+        meta: [
+          { label: "Fecha de generacion", value: new Date().toLocaleString("es-CL") },
+          { label: "Mes", value: mesLabel },
+        ],
+        summary: [
+          { label: "Registros", value: exportSummary.total },
+          { label: "A favor", value: `$ ${exportSummary.favor.toLocaleString("es-CL")}` },
+          { label: "En contra", value: `$ ${exportSummary.contra.toLocaleString("es-CL")}` },
+        ],
+        headers: ["Fecha cierre", "Rendicion", "Capacitador", "Destino", "Region", "Tipo", "Monto", "Estado"],
+        rows,
+      };
+      const ok =
+        type === "excel"
+          ? exportReportExcel({ fileName: "historial_saldos_secretaria.xls", ...config })
+          : exportReportPdf({ fileName: "historial_saldos_secretaria.pdf", ...config });
+      if (!ok) Alert.alert("Exportar", "La exportacion solo esta habilitada en web.");
+    },
+    [saldosCerradosFiltrados, historialMes, exportSummary]
+  );
 
   const pendientesAgrupados = useMemo(() => groupRendicionesByCapacitador(items), [items]);
 
@@ -582,7 +653,37 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       {viewMode !== "rendiciones" ? (
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Historial reciente de saldos cerrados</Text>
-        {saldosCerradosRecientes.length === 0 ? (
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <View
+            style={{
+              minWidth: 240,
+              borderWidth: 1,
+              borderColor: "#D9E5FF",
+              borderRadius: 10,
+              overflow: "hidden",
+              backgroundColor: "#fff",
+            }}
+          >
+            <Picker selectedValue={historialMes} onValueChange={setHistorialMes} style={{ height: 38 }}>
+              {historialMesOptions.map((opt) => (
+                <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+              ))}
+            </Picker>
+          </View>
+          <Pressable
+            style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
+            onPress={() => onExportHistorial("excel")}
+          >
+            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Descargar Excel</Text>
+          </Pressable>
+          <Pressable
+            style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
+            onPress={() => onExportHistorial("pdf")}
+          >
+            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Descargar PDF</Text>
+          </Pressable>
+        </View>
+        {saldosCerradosFiltrados.length === 0 ? (
           <Text style={{ color: "#6B7280", fontWeight: "700", marginTop: 8 }}>Aun no hay cierres registrados.</Text>
         ) : (
           historialPorCapacitador.map((grupo) => (
@@ -797,4 +898,21 @@ function resolveMontoSaldo(item) {
   if (pendiente > 0) return pendiente;
   return Math.abs(dif);
 }
+
+function resolveMonthKey(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function resolveMonthLabel(key) {
+  if (!key || !key.includes("-")) return "Sin mes";
+  const [year, month] = key.split("-");
+  const d = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(d.getTime())) return key;
+  return d.toLocaleDateString("es-CL", { month: "long", year: "numeric" });
+}
+
+
 

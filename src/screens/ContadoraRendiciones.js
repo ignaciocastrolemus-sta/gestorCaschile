@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
@@ -8,6 +9,7 @@ import KpiRow from "../components/KpiRow";
 import { isSaldoRendicionValida, normalizeText, resolveSaldoEstado, resolveTipoResultado } from "../utils/saldoUtils";
 import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
 import { obtenerSaldoMovimientos } from "../api/rendiciones";
+import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
 
 // Contadora: lista de rendiciones y resolucion (aprobar/rechazar)
 export default function ContadoraRendiciones({ token, viewMode = "all" }) {
@@ -31,6 +33,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [historyOpenByCap, setHistoryOpenByCap] = useState({});
   const [expandedCaps, setExpandedCaps] = useState({});
   const [visibleGroups, setVisibleGroups] = useState(6);
+  const [historialMes, setHistorialMes] = useState("todos");
 
   // Resumen rapido para priorizar revision.
   const kpis = useMemo(() => {
@@ -317,27 +320,95 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     return { count, monto, montoFavor, montoContra };
   }, [saldosFiltrados]);
 
-  // Bitacora visible para control operativo: ultimos saldos cerrados.
-  const saldosCerradosRecientes = useMemo(() => {
+  const saldosCerrados = useMemo(() => {
     return (saldos || [])
       .filter((r) => isSaldoRendicionValida(r) && resolveSaldoEstado(r) === "Cerrado")
       .sort((a, b) => {
         const fa = new Date(a?.saldoCerradoEn || a?.fechaEnvio || 0).getTime();
         const fb = new Date(b?.saldoCerradoEn || b?.fechaEnvio || 0).getTime();
         return fb - fa;
-      })
-      .slice(0, 8);
+      });
   }, [saldos]);
+
+  const historialMesOptions = useMemo(() => {
+    const unique = new Map();
+    saldosCerrados.forEach((r) => {
+      const key = resolveMonthKey(r?.saldoCerradoEn || r?.fechaEnvio);
+      if (!key) return;
+      unique.set(key, resolveMonthLabel(key));
+    });
+    return [{ value: "todos", label: "Todos los meses" }].concat(
+      Array.from(unique.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([value, label]) => ({ value, label }))
+    );
+  }, [saldosCerrados]);
+
+  const saldosCerradosFiltrados = useMemo(() => {
+    if (historialMes === "todos") return saldosCerrados;
+    return saldosCerrados.filter((r) => resolveMonthKey(r?.saldoCerradoEn || r?.fechaEnvio) === historialMes);
+  }, [saldosCerrados, historialMes]);
 
   const historialPorCapacitador = useMemo(() => {
     const map = new Map();
-    saldosCerradosRecientes.forEach((r) => {
+    saldosCerradosFiltrados.forEach((r) => {
       const cap = r?.viaje?.capacitador || "Sin nombre";
       if (!map.has(cap)) map.set(cap, []);
       map.get(cap).push(r);
     });
     return Array.from(map.entries()).map(([capacitador, rows]) => ({ capacitador, rows }));
-  }, [saldosCerradosRecientes]);
+  }, [saldosCerradosFiltrados]);
+
+  const exportSummary = useMemo(() => {
+    const total = saldosCerradosFiltrados.length;
+    const favor = saldosCerradosFiltrados
+      .filter((r) => resolveTipoResultado(r) === "Reembolso")
+      .reduce((acc, r) => acc + resolveMontoSaldo(r), 0);
+    const contra = saldosCerradosFiltrados
+      .filter((r) => resolveTipoResultado(r) === "Devolucion")
+      .reduce((acc, r) => acc + resolveMontoSaldo(r), 0);
+    return { total, favor, contra };
+  }, [saldosCerradosFiltrados]);
+
+  const onExportHistorial = useCallback(
+    (type) => {
+      const rows = saldosCerradosFiltrados.map((r) => {
+        const tipo = resolveTipoResultado(r);
+        return [
+          { value: formatFechaCorta(r?.saldoCerradoEn || r?.fechaEnvio) },
+          { value: r.id },
+          { value: r?.viaje?.capacitador || "-" },
+          { value: r?.viaje?.municipio || "-" },
+          { value: r?.viaje?.regionNombre || "-" },
+          { value: tipo },
+          { value: `$ ${resolveMontoSaldo(r).toLocaleString("es-CL")}`, align: "right" },
+          { value: resolveSaldoEstado(r) },
+        ];
+      });
+      const mesLabel = historialMes === "todos" ? "Todos los meses" : resolveMonthLabel(historialMes);
+      const config = {
+        title: "Historial de saldos cerrados",
+        subtitle: "Contadora - Rendiciones",
+        meta: [
+          { label: "Fecha de generacion", value: new Date().toLocaleString("es-CL") },
+          { label: "Mes", value: mesLabel },
+        ],
+        summary: [
+          { label: "Registros", value: exportSummary.total },
+          { label: "A favor", value: `$ ${exportSummary.favor.toLocaleString("es-CL")}` },
+          { label: "En contra", value: `$ ${exportSummary.contra.toLocaleString("es-CL")}` },
+        ],
+        headers: ["Fecha cierre", "Rendicion", "Capacitador", "Destino", "Region", "Tipo", "Monto", "Estado"],
+        rows,
+      };
+      const ok =
+        type === "excel"
+          ? exportReportExcel({ fileName: "historial_saldos_contadora.xls", ...config })
+          : exportReportPdf({ fileName: "historial_saldos_contadora.pdf", ...config });
+      if (!ok) setActionMsg("La exportacion solo esta habilitada en web.");
+    },
+    [saldosCerradosFiltrados, historialMes, exportSummary]
+  );
 
   const pendientesAgrupados = useMemo(() => groupRendicionesByCapacitador(items), [items]);
 
@@ -553,7 +624,22 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       {viewMode !== "rendiciones" ? (
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Historial reciente de saldos cerrados</Text>
-        {saldosCerradosRecientes.length === 0 ? (
+        <View style={[styles.actionsRow, { marginTop: 8, marginBottom: 8, flexWrap: "wrap" }]}>
+          <View style={styles.monthSelectWrap}>
+            <Picker selectedValue={historialMes} onValueChange={setHistorialMes} style={styles.monthPicker}>
+              {historialMesOptions.map((opt) => (
+                <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+              ))}
+            </Picker>
+          </View>
+          <Pressable style={styles.historyBtn} onPress={() => onExportHistorial("excel")}>
+            <Text style={styles.historyBtnText}>Descargar Excel</Text>
+          </Pressable>
+          <Pressable style={styles.historyBtn} onPress={() => onExportHistorial("pdf")}>
+            <Text style={styles.historyBtnText}>Descargar PDF</Text>
+          </Pressable>
+        </View>
+        {saldosCerradosFiltrados.length === 0 ? (
           <Text style={styles.detailHint}>Aun no hay cierres registrados.</Text>
         ) : (
           historialPorCapacitador.map((grupo) => (
@@ -861,6 +947,21 @@ function resolveContadoraGuidance(r, tipoResultado) {
   };
 }
 
+function resolveMonthKey(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function resolveMonthLabel(key) {
+  if (!key || !key.includes("-")) return "Sin mes";
+  const [year, month] = key.split("-");
+  const d = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(d.getTime())) return key;
+  return d.toLocaleDateString("es-CL", { month: "long", year: "numeric" });
+}
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
@@ -999,6 +1100,18 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: "#fff",
   },
+  monthSelectWrap: {
+    minWidth: 240,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#fff",
+  },
+  monthPicker: {
+    height: 38,
+    color: COLORS.text,
+  },
   actionsRow: { flexDirection: "row", gap: 10, marginTop: 12 },
   approveBtn: {
     flex: 1,
@@ -1029,4 +1142,7 @@ const styles = StyleSheet.create({
   },
   pageText: { color: COLORS.muted, fontWeight: "800" },
 });
+
+
+
 
