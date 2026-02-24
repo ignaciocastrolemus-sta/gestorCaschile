@@ -13,6 +13,7 @@ export default function AdminTarifas({ token }) {
   const [items, setItems] = useState([]);
   const [regiones, setRegiones] = useState([]);
   const [comunas, setComunas] = useState([]);
+  const [periodos, setPeriodos] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -34,23 +35,103 @@ export default function AdminTarifas({ token }) {
     activo: true,
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (periodoIdToLoad) => {
+    console.log("🚀 load() ejecutado. listPeriodo es:", listPeriodo, "Tipo:", typeof listPeriodo);
     try {
-      const res = await fetch(`${API_BASE}/TarifaMunicipio`, {
+      setLoading(true);
+      setError("");
+
+      // Usamos el parámetro que viene en la mano, no el estado general
+      if (!periodoIdToLoad) {
+        console.log("🛑 load() detenido porque listPeriodo está vacío o es falsy.");
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+
+      let url = `${API_BASE}/AsignacionClientes/matriz/${periodoIdToLoad}`;
+      console.log("🌐 Haciendo fetch a la URL:", url);
+
+      if(listRegionId) {
+        url += `?regionId=${listRegionId}`;
+      }
+
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(await res.text());
+      
+      if (!res.ok) throw new Error("Error cargando la matriz");
+      
       const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-      setError("");
-    } catch (e) {
-      setError(e?.message || "Error al cargar tarifas.");
+      
+      const datosAdaptados = data.map(dto => ({
+          id: dto.idAsignacion,               
+          idCliente: dto.idCliente,          
+          regionId: dto.idRegion,
+          municipio: `${dto.nombreComuna} - ${dto.razonSocialCliente}`, 
+          periodo: dto.idPeriodo,
+          desayuno: dto.montoDesayuno || 0,
+          almuerzo: dto.montoAlmuerzo || 0,
+          once: dto.montoOnce || 0,
+          cena: dto.montoCena || 0,
+          viatico: dto.montoViatico || 0,
+          activo: dto.activo ?? true
+      }));
+
+      setItems(datosAdaptados);
+      
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  }, [token]);
+  }, [listRegionId, token]); // ELIMINAMOS listPeriodo DE AQUÍ
 
   useEffect(() => {
-    load();
-  }, [load]);
+    // Si listPeriodo tiene un valor válido, disparamos pasándole el ID
+    console.log("🎯 Gatillo useEffect disparado. listPeriodo actual:", listPeriodo);
+    if (listPeriodo !== "") {
+      console.log("✅ Gatillo ordenando disparar load()...");
+      load(listPeriodo);
+    } else {
+      setItems([]);
+    }
+  }, [listPeriodo, listRegionId, load]);
+
+
+
+  // 2. Agrega este useEffect (que se ejecuta una sola vez al abrir la pantalla)
+  useEffect(() => {
+    const fetchCatalogosInit = async () => {
+      try {
+        // Llamamos a tu endpoint de Periodos
+        const res = await fetch(`${API_BASE}/Periodos`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setPeriodos(data); // Guardamos la lista completa para el Dropdown
+          
+          // Magia: Buscamos cuál es el periodo activo actualmente
+          const periodoActivo = data.find(p => p.activo === true);
+          
+          if (periodoActivo) {
+            // Al setear esto, React disparará automáticamente la función load()
+            // porque listPeriodo es una dependencia de tu tabla.
+            setListPeriodo(periodoActivo.id); 
+          } else if (data.length > 0) {
+            // Si por error no hay ninguno activo, seleccionamos el primero por defecto
+            setListPeriodo(data[0].id);
+          }
+        }
+      } catch (error) {
+        console.error("Error cargando periodos:", error);
+      }
+    };
+
+    fetchCatalogosInit();
+  }, [token]); // Solo se ejecuta al montar el componente
 
   useEffect(() => {
     let alive = true;
@@ -123,26 +204,41 @@ export default function AdminTarifas({ token }) {
   };
 
   const onSave = async () => {
-    if (!form.regionId || !form.municipio.trim() || !form.periodo) {
-      setError("Region, Municipio y Periodo son obligatorios.");
+    // Validamos que estemos editando un cliente específico (que hayamos clickeado en la grilla)
+    if (!editing || !editing.idCliente) {
+      setError("Por favor, seleccione 'Editar' en un cliente de la lista de abajo para asignarle tarifas.");
       return;
     }
+
+    if (!form.periodo) {
+      setError("El Periodo es obligatorio.");
+      return;
+    }
+
     try {
       setError("");
       setLoading(true);
+      
+      // Armamos el payload EXACTAMENTE como lo pide AsignacionClienteSaveDto en C#
       const payload = {
-        regionId: Number(form.regionId),
-        municipio: form.municipio.trim(),
-        periodo: Number(form.periodo),
-        desayuno: Number(form.desayuno || 0),
-        almuerzo: Number(form.almuerzo || 0),
-        once: Number(form.once || 0),
-        cena: Number(form.cena || 0),
-        viatico: Number(form.viatico || 0),
+        idCliente: editing.idCliente, 
+        idPeriodo: Number(form.periodo),
+        montoDesayuno: Number(form.desayuno || 0),
+        montoAlmuerzo: Number(form.almuerzo || 0),
+        montoOnce: Number(form.once || 0),
+        montoCena: Number(form.cena || 0),
+        montoViatico: Number(form.viatico || 0),
         activo: form.activo,
       };
-      const url = editing ? `${API_BASE}/TarifaMunicipio/${editing.id}` : `${API_BASE}/TarifaMunicipio`;
-      const method = editing ? "PUT" : "POST";
+
+      // Si el id es 0, es porque la matriz lo trajo por defecto (nunca guardado) -> POST
+      // Si el id es > 0, es porque ya tenía tarifa guardada -> PUT
+      const isNew = editing.id === 0;
+      const url = isNew 
+          ? `${API_BASE}/AsignacionClientes` 
+          : `${API_BASE}/AsignacionClientes/${editing.id}`;
+      const method = isNew ? "POST" : "PUT";
+
       const res = await fetch(url, {
         method,
         headers: {
@@ -151,10 +247,13 @@ export default function AdminTarifas({ token }) {
         },
         body: JSON.stringify(payload),
       });
+
       if (!res.ok) throw new Error(await res.text());
+      
       resetForm();
-      load();
-      Alert.alert("Tarifas", editing ? "Tarifa actualizada." : "Tarifa creada.");
+      // Recargamos la grilla pasándole el periodo actual que tenemos seleccionado
+      load(listPeriodo); 
+      Alert.alert("Tarifas", isNew ? "Tarifa creada." : "Tarifa actualizada.");
     } catch (e) {
       setError(e?.message || "Error al guardar.");
     } finally {
@@ -215,7 +314,7 @@ export default function AdminTarifas({ token }) {
       const regionId = String(t.regionId ?? t.RegionId ?? "");
       if (listRegionId && regionId !== listRegionId) return false;
       const periodo = String(t.periodo ?? t.Periodo ?? "");
-      if (listPeriodo && periodo !== listPeriodo) return false;
+      if (listPeriodo && periodo !== String(listPeriodo)) return false;
       if (listActivo) {
         const activo = Boolean(t.activo ?? t.Activo);
         if (listActivo === "true" && !activo) return false;
@@ -412,16 +511,27 @@ export default function AdminTarifas({ token }) {
                 </Picker>
               </View>
             </View>
-            <View style={styles.filterCol}>
-              <Text style={dash.label}>Periodo</Text>
-              <TextInput
-                value={listPeriodo}
-                onChangeText={(v) => setListPeriodo(v.replace(/[^\d]/g, ""))}
-                placeholder="2026"
-                placeholderTextColor={COLORS.muted}
-                style={dash.input}
-              />
-            </View>
+            
+            {/* FILTRO DE PERIODO */}
+        <View style={{ flex: 1, minWidth: 150 }}>
+          <Text style={styles.listSub}>Periodo de Tarifas:</Text>
+          <View style={{ borderWidth: 1, borderColor: COLORS.grayBorder, borderRadius: 8, backgroundColor: '#fff' }}>
+            <Picker
+              selectedValue={listPeriodo}
+              onValueChange={(itemValue) => setListPeriodo(itemValue)}
+            >
+              <Picker.Item label="Seleccione un periodo..." value="" />
+              {periodos.map(p => (
+                <Picker.Item 
+                  key={p.id} 
+                  label={p.nombre} 
+                  value={p.id} 
+                />
+              ))}
+            </Picker>
+          </View>
+        </View>
+
             <View style={styles.filterCol}>
               <Text style={dash.label}>Estado</Text>
               <View style={styles.selectWrap}>
@@ -470,7 +580,7 @@ export default function AdminTarifas({ token }) {
               regionNameById.get(Number(t.regionId ?? t.RegionId)) || String(t.regionId ?? t.RegionId);
             const activo = Boolean(t.activo ?? t.Activo);
             return (
-              <View key={t.id} style={styles.listCard}>
+              <View key={t.idCliente} style={styles.listCard}>
                 <View style={styles.listHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.listTitle}>{t.municipio || t.Municipio}</Text>

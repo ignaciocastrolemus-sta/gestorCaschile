@@ -543,7 +543,7 @@ export default function AdminUsuarios({ token, title }) {
                     Cuenta: {u.cuentaNumero || u.cuentaBancaria || "-"} · {u.cuentaTipo || "-"}
                   </Text>
                   <Text style={styles.cardDetail}>
-                    Banco: {u.banco || "-"} · Titular: {u.titularNombre || "-"} ({u.titularRut || "-"})
+                    Banco: {u.banco || "-"} · Titular: {u.nombre || "-"} ({u.rut || "-"})
                   </Text>
                 </View>
                 <View style={styles.actions}>

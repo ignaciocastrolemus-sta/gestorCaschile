@@ -31,24 +31,32 @@ export async function listarViajes() {
 }
 
 // CREAR viaje
-export async function crearViaje(viaje, token) {
-  const payload = normalizeViajePayload(viaje);
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
+export const crearViaje = async (payload, token) => {
+  try {
+    const res = await fetch(`${API_BASE}/AsignacionViajes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`, // Se inyecta el token de sesión
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || "Error al crear viaje");
+    const data = await res.json();
+
+    // Si la respuesta no es 200/201 (Ej. un 400 Bad Request por validación del backend)
+    if (!res.ok) {
+      // Intentamos extraer el campo "error" que envía el AsignacionViajesController
+      const mensajeError = data.error || "Error desconocido en el servidor.";
+      throw new Error(mensajeError); 
+    }
+
+    return data; // Si todo sale bien, retornamos el id del viaje asignado
+  } catch (error) {
+    // Propagamos el error hacia useSecretariaForm.js
+    throw error;
   }
-
-  return await res.json();
-}
+};
 
 // ACTUALIZAR viaje (PUT)
 export async function actualizarViaje(id, viaje) {

@@ -1,616 +1,553 @@
 import React from "react";
-import { View, Text, ScrollView, Pressable, Modal } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Field, Small } from "../components/FormFields";
-import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import {
   obtenerCapacitadores,
-  obtenerComunas,
-  obtenerJefesProyecto,
   obtenerRegiones,
   obtenerMunicipios,
+  obtenerSemanas,
+  obtenerClientesPorComuna,
+  obtenerTarifasPorCliente
 } from "../api/catalogos";
 
-// Secretaria: formulario principal de asignación de viajes
+// --- MINI COMPONENTE PARA SELECTORES CLÁSICOS ---
+const DropdownSelector = ({ label, value, placeholder, isOpen, onToggle, data, onSelect }) => (
+  <View style={{ zIndex: isOpen ? 5000 : 1, position: 'relative', flex: 1, marginHorizontal: 5, marginBottom: 15 }}>
+    <Text style={{ fontWeight: '600', marginBottom: 5, color: '#444', fontSize: 13 }}>{label}</Text>
+    <Pressable
+      style={{
+        borderWidth: 1, borderColor: '#ccc', borderRadius: 4, padding: 12,
+        backgroundColor: '#fff', flexDirection: 'row', justifyContent: 'space-between'
+      }}
+      onPress={onToggle}
+    >
+      <Text style={{ color: value ? '#000' : '#888', fontSize: 14 }}>{value || placeholder}</Text>
+      <Text style={{ color: '#888', fontSize: 12 }}>▼</Text>
+    </Pressable>
+
+    {isOpen && (
+      <View style={styles.dropdownAbs}>
+        <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
+          {(!data || data.length === 0) ? (
+            <Text style={{ padding: 12, color: '#888', fontStyle: 'italic' }}>Buscando opciones...</Text>
+          ) : (
+            data.map((item, index) => {
+              const nombre = item.nombre || item.nombreRegion || item.NombreRegion || item.nombreComuna || item.NombreComuna || item.razonSocial || item.RazonSocial || item.nombreCompleto || item.NombreCompleto;
+              const id = item.id ?? item.idRegion ?? item.IdRegion ?? item.idComuna ?? item.IdComuna ?? item.idCliente ?? item.IdCliente ?? item.idUsuario ?? item.IdUsuario ?? item.idSemana ?? item.IdSemana ?? `fallback-${index}`;
+              
+              return (
+                <Pressable 
+                  key={`drop-${id}-${index}`} 
+                  style={styles.dropdownItem} 
+                  onPress={() => onSelect(item, nombre, id)}
+                >
+                  <Text>{nombre}</Text>
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
+      </View>
+    )}
+  </View>
+);
+
+// --- COMPONENTE MINI CALENDARIO (RESTRINGIDO) ---
+const CalendarioGrid = ({ onSelectDate, semanaActiva }) => {
+  const [fechaVis, setFechaVis] = React.useState(new Date());
+
+  const parseFechaGrid = (v) => {
+    if (!v) return null;
+    const [d, m, y] = v.split("/").map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const cambiarMes = (offset) => {
+    setFechaVis(new Date(fechaVis.getFullYear(), fechaVis.getMonth() + offset, 1));
+  };
+
+  const renderDias = () => {
+    const diasEnMes = new Date(fechaVis.getFullYear(), fechaVis.getMonth() + 1, 0).getDate();
+    const primerDia = new Date(fechaVis.getFullYear(), fechaVis.getMonth(), 1).getDay();
+    const dias = [];
+
+    for (let i = 0; i < primerDia; i++) {
+      dias.push(<View key={`empty-${i}`} style={{ width: '14.2%' }} />);
+    }
+
+    // Lógica para deshabilitar días fuera de la semana elegida
+    let dInicio = null;
+    let dTermino = null;
+    if (semanaActiva && semanaActiva.fechaInicio && semanaActiva.fechaTermino) {
+      dInicio = parseFechaGrid(semanaActiva.fechaInicio);
+      dTermino = parseFechaGrid(semanaActiva.fechaTermino);
+    }
+
+    for (let i = 1; i <= diasEnMes; i++) {
+      const fechaActualIteracion = new Date(fechaVis.getFullYear(), fechaVis.getMonth(), i);
+      let isHabilitado = true;
+
+      // Si tenemos semana activa, verificamos que el día esté en el rango
+      if (dInicio && dTermino) {
+        if (fechaActualIteracion < dInicio || fechaActualIteracion > dTermino) {
+          isHabilitado = false;
+        }
+      }
+
+      dias.push(
+        <Pressable
+          key={`dia-${i}`}
+          disabled={!isHabilitado}
+          style={({ pressed }) => ({
+            width: '14.2%', paddingVertical: 10, alignItems: 'center',
+            backgroundColor: pressed ? '#e0e0e0' : 'transparent', 
+            borderRadius: 20,
+            opacity: isHabilitado ? 1 : 0.2 // Se vuelve fantasma si está fuera de la semana
+          })}
+          onPress={() => {
+            const diaStr = String(i).padStart(2, '0');
+            const mesStr = String(fechaVis.getMonth() + 1).padStart(2, '0');
+            const anioStr = fechaVis.getFullYear();
+            onSelectDate(`${diaStr}/${mesStr}/${anioStr}`);
+          }}
+        >
+          <Text style={{ fontSize: 14, color: isHabilitado ? '#333' : '#999', fontWeight: isHabilitado ? 'bold' : 'normal' }}>{i}</Text>
+        </Pressable>
+      );
+    }
+    return dias;
+  };
+
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+  return (
+    <View style={{ width: '100%', marginTop: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+        <Pressable onPress={() => cambiarMes(-1)} style={{ padding: 5 }}><Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4a90e2' }}>{"<"}</Text></Pressable>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>{meses[fechaVis.getMonth()]} {fechaVis.getFullYear()}</Text>
+        <Pressable onPress={() => cambiarMes(1)} style={{ padding: 5 }}><Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4a90e2' }}>{">"}</Text></Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5, marginBottom: 5 }}>
+        {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'].map(d => (
+          <Text key={d} style={{ width: '14.2%', textAlign: 'center', fontWeight: 'bold', color: '#888', fontSize: 12 }}>{d}</Text>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {renderDias()}
+      </View>
+    </View>
+  );
+};
+
 export default function FormularioGasto({
-  tipo,
   form,
-  diasHabiles = 0,
   token,
   onTextChange,
   onNumberChange,
-  onFechaInicioSelect,
   onSave,
   onToggleNoAplica,
-  onChangeTipoViaje,
   saveMsg,
 }) {
   const [regiones, setRegiones] = React.useState([]);
-  const [comunasPorRegion, setComunasPorRegion] = React.useState({});
   const [municipios, setMunicipios] = React.useState([]);
   const [capacitadores, setCapacitadores] = React.useState([]);
-  const [jefesProyecto, setJefesProyecto] = React.useState([]);
-
-  React.useEffect(() => {
-    let alive = true;
-    if (!token)
-      return () => {
-        alive = false;
-      };
-    (async () => {
-      try {
-        const [regionesRes, comunasRes, capsRes, jefesRes] = await Promise.all([
-          obtenerRegiones(token),
-          obtenerComunas(token),
-          obtenerCapacitadores(token),
-          obtenerJefesProyecto(token),
-        ]);
-
-        if (!alive) return;
-
-        const regionesNombres = Array.isArray(regionesRes)
-          ? regionesRes
-              .map((r) => ({
-                id: r?.id ?? r?.Id ?? null,
-                nombre: r?.nombre ?? r?.Nombre ?? r,
-              }))
-              .filter((r) => !!r.nombre)
-              .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
-          : [];
-
-        const comunasMap = {};
-        if (Array.isArray(comunasRes)) {
-          comunasRes.forEach((c) => {
-            const regionName = c?.region?.nombre ?? c?.region?.Nombre ?? c?.regionNombre ?? c?.RegionNombre;
-            const comunaNombre = c?.nombre ?? c?.Nombre ?? c;
-            if (!regionName || !comunaNombre) return;
-            if (!comunasMap[regionName]) comunasMap[regionName] = [];
-            comunasMap[regionName].push(comunaNombre);
-          });
-        }
-
-        Object.keys(comunasMap).forEach((key) => {
-          comunasMap[key] = comunasMap[key].slice().sort((a, b) => a.localeCompare(b, "es"));
-        });
-
-        setRegiones(regionesNombres);
-        setComunasPorRegion(comunasMap);
-        const capsNombres = Array.isArray(capsRes)
-          ? capsRes
-              .map((c) => c?.nombre ?? c?.Nombre ?? c)
-              .filter((c) => typeof c === "string" && c.trim().length > 0)
-          : [];
-        const jefesNombres = Array.isArray(jefesRes)
-          ? jefesRes
-              .map((j) => j?.nombre ?? j?.Nombre ?? j)
-              .filter((j) => typeof j === "string" && j.trim().length > 0)
-          : [];
-
-        setCapacitadores(capsNombres);
-        setJefesProyecto(jefesNombres);
-      } catch (err) {
-        console.log("Catalogos: error al cargar", err);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [token]);
-
-  React.useEffect(() => {
-    const regionName = (form.region || "").trim();
-    if (!regionName) {
-      setMunicipios([]);
-      return;
-    }
-    const normalized = regionName.toLowerCase();
-    const region = regiones.find((r) => (r.nombre || "").toLowerCase() === normalized);
-    const regionId = region?.id;
-    if (!regionId) {
-      setMunicipios([]);
-      return;
-    }
-    let alive = true;
-    (async () => {
-      try {
-        const data = await obtenerMunicipios(regionId, token);
-        if (!alive) return;
-        setMunicipios(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.log("Municipios: error al cargar", err);
-        setMunicipios([]);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [form.region, regiones, token]);
-
-  const weekDays = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
-  const monthNames = [
-    "Enero",
-    "Febrero",
-    "Marzo",
-    "Abril",
-    "Mayo",
-    "Junio",
-    "Julio",
-    "Agosto",
-    "Septiembre",
-    "Octubre",
-    "Noviembre",
-    "Diciembre",
-  ];
-  const parseFecha = (value) => {
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return null;
-    const [dd, mm, yyyy] = value.split("/").map(Number);
-    const date = new Date(yyyy, mm - 1, dd);
-    if (date.getFullYear() !== yyyy || date.getMonth() !== mm - 1 || date.getDate() !== dd) {
-      return null;
-    }
-    return date;
-  };
-  const isSameDay = (a, b) => {
-    if (!a || !b) return false;
-    return (
-      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-    );
-  };
-  const buildCalendarCells = (year, month) => {
-    const firstDay = new Date(year, month, 1);
-    const startOffset = (firstDay.getDay() + 6) % 7;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const cells = [];
-    for (let i = 0; i < startOffset; i += 1) cells.push(null);
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      cells.push(new Date(year, month, day));
-    }
-    while (cells.length % 7 !== 0) cells.push(null);
-    return cells;
-  };
+  const [clientesDisponibles, setClientesDisponibles] = React.useState([]);
+  
+  const [semanasAbiertas, setSemanasAbiertas] = React.useState([]); // Pool de semanas
+  const [semanaActiva, setSemanaActiva] = React.useState(null); // Semana seleccionada
+  
   const [calendarOpen, setCalendarOpen] = React.useState(false);
-  const [calendarMonth, setCalendarMonth] = React.useState(() => {
-    const selected = parseFecha(form.fechaInicio);
-    const base = selected || new Date();
-    return new Date(base.getFullYear(), base.getMonth(), 1);
-  });
-  const selectedDate = parseFecha(form.fechaInicio);
-  const calendarCells = buildCalendarCells(calendarMonth.getFullYear(), calendarMonth.getMonth());
-  const openCalendar = () => {
-    const selected = parseFecha(form.fechaInicio);
-    const base = selected || new Date();
-    setCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+  const [campoAEditar, setCampoAEditar] = React.useState(null);
+
+  const abrirCalendario = (campo) => {
+    setCampoAEditar(campo);
     setCalendarOpen(true);
   };
-  const onSelectDate = (date) => {
-    if (date) onFechaInicioSelect(date);
-    setCalendarOpen(false);
-  };
-  const onPrevMonth = () => {
-    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  };
-  const onNextMonth = () => {
-    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
-  const diasParaCalculo = diasHabiles > 0 ? diasHabiles : Number(form.dias || 0);
-  const subtotalAsignacion =
-    Number(form.desayuno || 0) +
-    Number(form.almuerzo || 0) +
-    Number(form.once || 0) +
-    Number(form.cena || 0) +
-    Number(form.viatico || 0);
-  const subtotalAsignacionTotal =
-    subtotalAsignacion * (Number.isFinite(diasParaCalculo) ? diasParaCalculo : 0);
-  const totalManual =
-    Number(form.movAsignado || 0) +
-    Number(form.transferUber || 0) +
-    Number(form.colectivoTaxi || 0) +
-    Number(form.peajes || 0) +
-    Number(form.reembolsos || 0) +
-    Number(form.varios || 0) +
-    Number(form.copec || 0);
+  
+  const [menuAbierto, setMenuAbierto] = React.useState(null); 
 
-  // KPI para resumen rapido del formulario de asignacion.
-  const kpiItems = [
-    { key: "dias", label: "Dias habiles", value: diasParaCalculo || 0 },
-    {
-      key: "asignacion",
-      label: "Asignacion total",
-      value: `$ ${subtotalAsignacionTotal.toLocaleString("es-CL")}`,
-    },
-    { key: "manual", label: "Gasto manual", value: `$ ${totalManual.toLocaleString("es-CL")}` },
-    {
-      key: "tipo",
-      label: "Tipo de viaje",
-      value: tipo === "regiones" ? "Regiones" : "Santiago",
-    },
+  // --- 1. CARGA INICIAL ---
+  React.useEffect(() => {
+    if (!token) return;
+    (async () => {
+      try {
+        const [regRes, capRes, semRes] = await Promise.all([
+          obtenerRegiones(token),
+          obtenerCapacitadores(token),
+          obtenerSemanas(token)
+        ]);
+
+        // Guardamos TODAS las semanas que estén abiertas en el Pool
+        const abiertas = Array.isArray(semRes) 
+          ? semRes.filter(s => s.esAbierta === true || s.EsAbierta === true) 
+          : [];
+        
+        setSemanasAbiertas(abiertas);
+
+        // Si hay al menos una, la seleccionamos por defecto
+        if (abiertas.length > 0) {
+          setSemanaActiva(abiertas[0]);
+          onTextChange("idSemana", abiertas[0].idSemana || abiertas[0].IdSemana);
+        }
+
+        setRegiones(Array.isArray(regRes) ? regRes : []);
+        setCapacitadores(Array.isArray(capRes) ? capRes : []);
+      } catch (err) { console.error("Error en carga inicial:", err); }
+    })();
+  }, [token]);
+
+  // --- 2. CASCADA: REGIÓN -> COMUNA ---
+  React.useEffect(() => {
+    if (form.idRegion) {
+      obtenerMunicipios(form.idRegion, token)
+        .then(res => {
+          const lista = Array.isArray(res) ? res : (res && res.id ? [res] : (res.$values || res.data || []));
+          setMunicipios(lista);
+        })
+        .catch(err => setMunicipios([]));
+    } else {
+      setMunicipios([]);
+    }
+  }, [form.idRegion, token]);
+
+  // --- 3. CASCADA: COMUNA -> CLIENTE ---
+  React.useEffect(() => {
+    if (form.idComuna) {
+      obtenerClientesPorComuna(form.idComuna, token)
+        .then(res => {
+          const lista = Array.isArray(res) ? res : (res.data || []);
+          setClientesDisponibles(lista);
+        })
+        .catch(() => setClientesDisponibles([]));
+    } else {
+      setClientesDisponibles([]);
+    }
+  }, [form.idComuna, token]);
+
+  // --- 4. CÁLCULO DE FECHAS (Sin Fines de Semana) ---
+  const parseFecha = (v) => {
+    if (!v) return null;
+    const [d, m, y] = v.split("/").map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  React.useEffect(() => {
+    if (form.fechaInicio && form.fechaTermino) {
+      const inicio = parseFecha(form.fechaInicio);
+      const termino = parseFecha(form.fechaTermino);
+
+      if (inicio && termino && termino >= inicio) {
+        let diasHabiles = 0;
+        let fechaTemp = new Date(inicio);
+
+        while (fechaTemp <= termino) {
+          const diaSemana = fechaTemp.getDay();
+          // Saltar 0 (Domingo) y 6 (Sábado)
+          if (diaSemana !== 0 && diaSemana !== 6) {
+            diasHabiles++;
+          }
+          fechaTemp.setDate(fechaTemp.getDate() + 1);
+        }
+
+        if (form.dias !== String(diasHabiles)) {
+          onNumberChange("dias", String(diasHabiles));
+        }
+      } else if (inicio > termino) {
+        onNumberChange("dias", "0");
+      }
+    }
+  }, [form.fechaInicio, form.fechaTermino]);
+
+  // --- 5. TOTALES ---
+  const subtotalTarifas = Number(form.desayuno || 0) + Number(form.almuerzo || 0) + Number(form.once || 0) + Number(form.cena || 0) + Number(form.viatico || 0);
+  const totalAsignacion = subtotalTarifas * Number(form.dias || 0);
+  const totalManual = Number(form.movAsignado || 0) + Number(form.transferUber || 0) + Number(form.peajes || 0) + Number(form.copec || 0) + Number(form.varios || 0);
+  const presupuestoTotal = totalAsignacion + totalManual;
+  const opcionesModalidad = [
+    { id: "Terreno", nombre: "Terreno" },
+    { id: "Remoto", nombre: "Remoto" }
   ];
 
-  const regionesNombres = regiones.map((r) => r.nombre);
-  const regionesFiltradas = regionesNombres.filter((r) =>
-    r.toLowerCase().includes((form.region || "").toLowerCase())
-  );
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView style={{ backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
+        
+        {/* HEADER DINÁMICO */}
+        <View style={[styles.banner, { borderColor: semanaActiva ? COLORS.success : COLORS.danger }]}>
+          <Text style={{ fontWeight: 'bold', fontSize: 16, color: semanaActiva ? '#2e7d32' : '#c62828' }}>
+            {semanaActiva ? `✅ Trabajando en: ${semanaActiva.nombre || semanaActiva.Nombre}` : "⚠️ Sistema Bloqueado: No hay semanas abiertas"}
+          </Text>
+          <Text style={{ fontSize: 13, color: '#666', marginTop: 4 }}>
+            {semanaActiva ? `Rango permitido para el viaje: ${semanaActiva.fechaInicio} al ${semanaActiva.fechaTermino}` : "Contacte al Administrador."}
+          </Text>
+        </View>
 
-  const comunas = comunasPorRegion[form.region] || [];
-  const municipiosDisponibles = municipios.length > 0 ? municipios : comunas;
-  const comunasFiltradas = municipiosDisponibles.filter((c) =>
-    c.toLowerCase().includes((form.comuna || "").toLowerCase())
-  );
-  const capacitadoresFiltrados = capacitadores.filter((c) =>
-    c.toLowerCase().includes((form.capacitador || "").toLowerCase())
-  );
-  const jefesFiltrados = jefesProyecto.filter((c) =>
-    c.toLowerCase().includes((form.jefe || "").toLowerCase())
-  );
-  const isExactMatch = (value, list) => {
-    if (!value) return false;
-    const normalized = value.trim().toLowerCase();
-    return list.some((item) => item.toLowerCase() === normalized);
-  };
-  const showCapacitadores =
-    !!form.capacitador && capacitadoresFiltrados.length > 0 && !isExactMatch(form.capacitador, capacitadores);
-  const showJefes = !!form.jefe && jefesFiltrados.length > 0 && !isExactMatch(form.jefe, jefesProyecto);
-  const showRegiones =
-    tipo === "regiones" &&
-    !!form.region &&
-    regionesFiltradas.length > 0 &&
-    !isExactMatch(form.region, regionesNombres);
-  const showComunas =
-    !!form.comuna && comunasFiltradas.length > 0 && !isExactMatch(form.comuna, municipiosDisponibles);
+        <KpiRow items={[
+          { key: "kpi-dias", label: "Días a pagar", value: form.dias || 0 },
+          { key: "kpi-total", label: "Presupuesto Total", value: `$${presupuestoTotal.toLocaleString("es-CL")}` }
+        ]} />
 
-  const DateField = ({ label, value, placeholder, onPress }) => (
-    <View style={{ flex: 1, marginBottom: 12 }}>
-      <Text style={dash.label}>{label}</Text>
-      <Pressable style={dash.input} onPress={onPress}>
-        <Text style={{ color: value ? COLORS.text : COLORS.muted, fontWeight: "700" }}>
-          {value || placeholder}
-        </Text>
-      </Pressable>
+        {/* ========================================== */}
+        {/* BOX 1: DATOS DEL VIAJE                     */}
+        {/* ========================================== */}
+        <View style={[dash.panel, { zIndex: 1000 }]}>
+          <Text style={dash.panelTitle}>Datos del viaje</Text>
+
+          {/* NUEVO SELECTOR DE SEMANAS (Z-INDEX ALTO) */}
+          <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'sem' ? 4000 : 1 }}>
+            <DropdownSelector
+              label="Semana a Planificar"
+              placeholder="Seleccione la semana..."
+              value={semanaActiva ? (semanaActiva.nombre || semanaActiva.Nombre) : ""}
+              isOpen={menuAbierto === 'sem'}
+              onToggle={() => setMenuAbierto(menuAbierto === 'sem' ? null : 'sem')}
+              data={semanasAbiertas}
+              onSelect={(item, nombre, id) => {
+                setSemanaActiva(item);
+                onTextChange("idSemana", id);
+                setMenuAbierto(null);
+                
+                // Limpiamos las fechas si cambia de semana para evitar errores
+                onTextChange("fechaInicio", "");
+                onTextChange("fechaTermino", "");
+                onNumberChange("dias", "0");
+              }}
+            />
+          </View>
+
+          <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'cap' ? 3000 : 1 }}>
+            <DropdownSelector
+              label="Capacitador Asignado"
+              placeholder="Seleccione capacitador..."
+              value={form.capacitador}
+              isOpen={menuAbierto === 'cap'}
+              onToggle={() => setMenuAbierto(menuAbierto === 'cap' ? null : 'cap')}
+              data={capacitadores}
+              onSelect={(item, nombre, id) => {
+                onTextChange("capacitador", nombre);
+                onTextChange("idCapacitador", id);
+                setMenuAbierto(null);
+              }}
+            />
+          </View>
+
+          <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'mod' ? 2500 : 1 }}>
+            <DropdownSelector
+              label="Modalidad de Trabajo"
+              placeholder="Seleccione modalidad..."
+              value={form.modalidad}
+              isOpen={menuAbierto === 'mod'}
+              onToggle={() => setMenuAbierto(menuAbierto === 'mod' ? null : 'mod')}
+              data={opcionesModalidad}
+              onSelect={(item, nombre, id) => {
+                onTextChange("modalidad", id);
+                setMenuAbierto(null);
+              }}
+            />
+          </View>
+
+          <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'reg' || menuAbierto === 'mun' ? 2000 : 1 }}>
+            <DropdownSelector
+              label="Región"
+              placeholder="Elegir región..."
+              value={form.region}
+              isOpen={menuAbierto === 'reg'}
+              onToggle={() => setMenuAbierto(menuAbierto === 'reg' ? null : 'reg')}
+              data={regiones}
+              onSelect={(item, nombre, id) => {
+                onTextChange("region", nombre);
+                onTextChange("idRegion", id);
+                onTextChange("comuna", "");
+                onTextChange("idComuna", "");
+                onTextChange("cliente", "");
+                onTextChange("idCliente", "");
+                setClientesDisponibles([]); 
+                setMenuAbierto(null);
+              }}
+            />
+
+            <DropdownSelector
+              label="Comuna"
+              placeholder="Elegir comuna..."
+              value={form.comuna}
+              isOpen={menuAbierto === 'mun'}
+              onToggle={() => setMenuAbierto(menuAbierto === 'mun' ? null : 'mun')}
+              data={municipios}
+              onSelect={(item, nombre, id) => {
+                onTextChange("comuna", nombre);
+                onTextChange("idComuna", id);
+                onTextChange("cliente", "");
+                onTextChange("idCliente", "");
+                setMenuAbierto(null);
+              }}
+            />
+          </View>
+
+          <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'cli' ? 1000 : 1 }}>
+            <DropdownSelector
+              label="Cliente / Institución"
+              placeholder="Seleccione el cliente..."
+              value={form.cliente}
+              isOpen={menuAbierto === 'cli'}
+              onToggle={() => setMenuAbierto(menuAbierto === 'cli' ? null : 'cli')}
+              data={clientesDisponibles}
+              onSelect={async (item, nombre, id) => {
+                onTextChange("cliente", nombre);
+                onTextChange("idCliente", id);
+                setMenuAbierto(null);
+                
+                try {
+                  const t = await obtenerTarifasPorCliente(id, token);
+                  const v = t.find(x => x.activo || x.Activo) || t[0];
+                  if (v) {
+                    onNumberChange("desayuno", v.montoDesayuno || v.MontoDesayuno || 0);
+                    onNumberChange("almuerzo", v.montoAlmuerzo || v.MontoAlmuerzo || 0);
+                    onNumberChange("once", v.montoOnce || v.MontoOnce || 0);
+                    onNumberChange("cena", v.montoCena || v.MontoCena || 0);
+                    onNumberChange("viatico", v.montoViatico || v.MontoViatico || 0);
+                  }
+                } catch (e) { console.error("Error tarifas:", e); }
+              }}
+            />
+          </View>
+
+          <View style={dash.grid3}>
+            <Field label="Días Laborales" value={form.dias} onChangeText={v => onNumberChange("dias", v)} keyboardType="numeric" />
+            
+            <Pressable style={{flex: 1}} onPress={() => abrirCalendario('fechaInicio')}>
+              <View pointerEvents="none">
+                <Field label="Fecha Inicio" value={form.fechaInicio} disabled />
+              </View>
+            </Pressable>
+            
+            <Pressable style={{flex: 1}} onPress={() => abrirCalendario('fechaTermino')}>
+              <View pointerEvents="none">
+                <Field label="Fecha Término" value={form.fechaTermino} disabled />
+              </View>
+            </Pressable>
+          </View>
+
+        </View>
+
+        {/* ========================================== */}
+        {/* BOX 2: ASIGNACIONES                        */}
+        {/* ========================================== */}
+        <View style={[dash.panel, { zIndex: 10 }]}>
+          <Text style={dash.panelTitle}>Asignaciones (Matriz de Tarifas)</Text>
+          <View style={dash.grid5}>
+            <Small label="Desayuno" value={form.desayuno} disabled={form.noDesayuno} onToggle={() => onToggleNoAplica("noDesayuno", "desayuno")} />
+            <Small label="Almuerzo" value={form.almuerzo} disabled={form.noAlmuerzo} onToggle={() => onToggleNoAplica("noAlmuerzo", "almuerzo")} />
+            <Small label="Once" value={form.once} disabled={form.noOnce} onToggle={() => onToggleNoAplica("noOnce", "once")} />
+            <Small label="Cena" value={form.cena} disabled={form.noCena} onToggle={() => onToggleNoAplica("noCena", "cena")} />
+            <Small label="Viático" value={form.viatico} disabled={form.noViatico} onToggle={() => onToggleNoAplica("noViatico", "viatico")} />
+          </View>
+          <View style={dash.totalRow}>
+            <Text style={dash.totalLabel}>Subtotal Diario: ${subtotalTarifas.toLocaleString("es-CL")}</Text>
+            <View style={dash.totalBox}>
+              <Text style={dash.totalText}>Total Asignación: ${totalAsignacion.toLocaleString("es-CL")}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ========================================== */}
+        {/* BOX 3: OTROS GASTOS                        */}
+        {/* ========================================== */}
+        <View style={[dash.panel, { zIndex: 5 }]}>
+          <Text style={dash.panelTitle}>Otros Gastos (Rendición Manual)</Text>
+          <View style={dash.grid3}>
+            <Field label="Movilidad Asignada" value={form.movAsignado} onChangeText={v => onNumberChange("movAsignado", v)} keyboardType="numeric" />
+            <Field label="Uber/Transfer" value={form.transferUber} onChangeText={v => onNumberChange("transferUber", v)} keyboardType="numeric" />
+            <Field label="Peajes" value={form.peajes} onChangeText={v => onNumberChange("peajes", v)} keyboardType="numeric" />
+          </View>
+          <View style={dash.grid3}>
+            <Field label="Combustible" value={form.copec} onChangeText={v => onNumberChange("copec", v)} keyboardType="numeric" />
+            <Field label="Varios" value={form.varios} onChangeText={v => onNumberChange("varios", v)} keyboardType="numeric" />
+            <View style={{ marginTop: 10, marginBottom: 15 }}>
+             <Field 
+               label="Observaciones (Opcional)" 
+               value={form.observacion} 
+               onChangeText={v => onTextChange("observacion", v)} 
+               placeholder="Ej: Viaje incluye parada en sucursal norte..."
+             />
+          </View>
+            <Pressable 
+              style={[dash.saveBtn, !semanaActiva && { backgroundColor: '#ccc' }]} 
+              onPress={onSave} 
+              disabled={!semanaActiva}
+            >
+              <Text style={dash.saveText}>{semanaActiva ? "Guardar Viaje" : "Cerrado"}</Text>
+            </Pressable>
+          </View>
+          {!!saveMsg && <Text style={dash.saveMsg}>{saveMsg}</Text>}
+        </View>
+
+      </ScrollView>
+
+      {/* OVERLAY DEL CALENDARIO CON GRILLA RESTRINGIDA */}
+      {calendarOpen && (
+        <View style={{
+          position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center', alignItems: 'center',
+          zIndex: 999999
+        }}>
+          <View style={[dash.calendarCard, { backgroundColor: '#fff', padding: 20, borderRadius: 12, minWidth: 320, maxWidth: 350 }]}>
+            <Text style={{textAlign: 'center', fontWeight: 'bold', fontSize: 16, color: '#333'}}>
+              {campoAEditar === 'fechaInicio' ? 'Seleccione Fecha de Inicio' : 'Seleccione Fecha de Término'}
+            </Text>
+            
+            <CalendarioGrid 
+              semanaActiva={semanaActiva} // Le pasamos la semana para que bloquee los días
+              onSelectDate={(fechaFormateada) => {
+                if (campoAEditar) onTextChange(campoAEditar, fechaFormateada); 
+                setCalendarOpen(false);
+                setCampoAEditar(null);
+              }} 
+            />
+
+            <Pressable 
+              style={[dash.calendarCloseBtn, { marginTop: 15 }]} 
+              onPress={() => { setCalendarOpen(false); setCampoAEditar(null); }}
+            >
+              <Text style={dash.calendarCloseText}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
-
-  return (
-    <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-      <PageHeader
-        title={tipo === "regiones" ? "Ingresar gasto (Regiones)" : "Ingresar gasto (Santiago)"}
-        subtitle="Formulario de asignacion de viaje."
-      />
-      <KpiRow items={kpiItems} />
-
-      <View style={dash.panel}>
-        <Text style={dash.panelTitle}>Datos del viaje</Text>
-
-        <View style={dash.grid2}>
-          <View style={{ flex: 1 }}>
-            <Text style={dash.label}>Tipo de viaje</Text>
-            <View style={dash.toggleRow}>
-              <Pressable
-                style={[dash.toggleBtn, tipo === "santiago" && dash.toggleBtnActive]}
-                onPress={() => onChangeTipoViaje("santiago")}
-              >
-                <Text style={[dash.toggleText, tipo === "santiago" && dash.toggleTextActive]}>Santiago</Text>
-              </Pressable>
-              <Pressable
-                style={[dash.toggleBtn, tipo === "regiones" && dash.toggleBtnActive]}
-                onPress={() => onChangeTipoViaje("regiones")}
-              >
-                <Text style={[dash.toggleText, tipo === "regiones" && dash.toggleTextActive]}>Regiones</Text>
-              </Pressable>
-            </View>
-          </View>
-          <View />
-        </View>
-
-        <View style={dash.grid2}>
-          <Field label="Fecha" placeholder="DD/MM/AAAA" value={form.fecha} disabled />
-          <Field
-            label="Capacitador"
-            placeholder="Seleccionar..."
-            value={form.capacitador}
-            onChangeText={(value) => onTextChange("capacitador", value)}
-          />
-        </View>
-        {showCapacitadores && (
-          <View style={dash.suggestBox}>
-            {capacitadoresFiltrados.slice(0, 6).map((item) => (
-              <Pressable
-                key={item}
-                style={dash.suggestItem}
-                onPress={() => onTextChange("capacitador", item)}
-              >
-                <Text style={dash.suggestText}>{item}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        <View style={dash.grid2}>
-          <Field
-            label="Jefe Proyecto / Capacitador"
-            placeholder="Seleccionar..."
-            value={form.jefe}
-            onChangeText={(value) => onTextChange("jefe", value)}
-          />
-          {tipo === "regiones" ? (
-            <Field
-              label="Region"
-              placeholder="Ej: Valparaiso"
-              value={form.region}
-              onChangeText={(value) => onTextChange("region", value)}
-            />
-          ) : (
-            <Field
-              label="Region"
-              placeholder="Metropolitana"
-              value={form.region || "Metropolitana de Santiago"}
-              disabled
-            />
-          )}
-        </View>
-        {showJefes && (
-          <View style={dash.suggestBox}>
-            {jefesFiltrados.slice(0, 6).map((item) => (
-              <Pressable key={item} style={dash.suggestItem} onPress={() => onTextChange("jefe", item)}>
-                <Text style={dash.suggestText}>{item}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-        {showRegiones && (
-          <View style={dash.suggestBox}>
-            {regionesFiltradas.slice(0, 6).map((item) => (
-              <Pressable key={item} style={dash.suggestItem} onPress={() => onTextChange("region", item)}>
-                <Text style={dash.suggestText}>{item}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        <View style={dash.grid2}>
-          <View style={{ flex: 1 }}>
-            <Text style={dash.label}>Modalidad</Text>
-            <View style={dash.toggleRow}>
-              <Pressable
-                style={[dash.toggleBtn, form.modalidad === "Terreno" && dash.toggleBtnActive]}
-                onPress={() => onTextChange("modalidad", "Terreno")}
-              >
-                <Text style={[dash.toggleText, form.modalidad === "Terreno" && dash.toggleTextActive]}>
-                  Terreno
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[dash.toggleBtn, form.modalidad === "Oficina" && dash.toggleBtnActive]}
-                onPress={() => onTextChange("modalidad", "Oficina")}
-              >
-                <Text style={[dash.toggleText, form.modalidad === "Oficina" && dash.toggleTextActive]}>
-                  Oficina
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-          <Field
-            label="Dias"
-            placeholder="Ej: 5"
-            value={form.dias}
-            onChangeText={(value) => onNumberChange("dias", value)}
-            keyboardType="numeric"
-          />
-        </View>
-        <View style={dash.grid2}>
-          <DateField
-            label="Fecha inicio viaje"
-            placeholder="DD/MM/AAAA"
-            value={form.fechaInicio}
-            onPress={openCalendar}
-          />
-          <Field label="Fecha termino viaje" placeholder="DD/MM/AAAA" value={form.fechaTermino} disabled />
-        </View>
-        <View style={dash.grid2}>
-          <Field
-            label="Comuna / Municipalidad"
-            placeholder="Escribir comuna"
-            value={form.comuna}
-            onChangeText={(value) => onTextChange("comuna", value)}
-          />
-          <View />
-        </View>
-        {showComunas && (
-          <View style={dash.suggestBox}>
-            {comunasFiltradas.slice(0, 8).map((item) => (
-              <Pressable key={item} style={dash.suggestItem} onPress={() => onTextChange("comuna", item)}>
-                <Text style={dash.suggestText}>{item}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View style={dash.panel}>
-        <Text style={dash.panelTitle}>Asignaciones (por dia)</Text>
-
-        <View style={dash.grid5}>
-          <Small
-            label="Desayuno"
-            value={form.desayuno}
-            onChangeText={(value) => onNumberChange("desayuno", value)}
-            disabled={form.noDesayuno}
-            onToggle={() => onToggleNoAplica("noDesayuno", "desayuno")}
-          />
-          <Small
-            label="Almuerzo"
-            value={form.almuerzo}
-            onChangeText={(value) => onNumberChange("almuerzo", value)}
-            disabled={form.noAlmuerzo}
-            onToggle={() => onToggleNoAplica("noAlmuerzo", "almuerzo")}
-          />
-          <Small
-            label="Once"
-            value={form.once}
-            onChangeText={(value) => onNumberChange("once", value)}
-            disabled={form.noOnce}
-            onToggle={() => onToggleNoAplica("noOnce", "once")}
-          />
-          <Small
-            label="Cena"
-            value={form.cena}
-            onChangeText={(value) => onNumberChange("cena", value)}
-            disabled={form.noCena}
-            onToggle={() => onToggleNoAplica("noCena", "cena")}
-          />
-          <Small
-            label="Viatico"
-            value={form.viatico}
-            onChangeText={(value) => onNumberChange("viatico", value)}
-            disabled={form.noViatico}
-            onToggle={() => onToggleNoAplica("noViatico", "viatico")}
-          />
-        </View>
-
-        <View style={dash.totalRow}>
-          <Text style={dash.totalLabel}>Subtotal</Text>
-          <View style={dash.totalBox}>
-            <Text style={dash.totalText}>${subtotalAsignacionTotal.toLocaleString("es-CL")}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={dash.panel}>
-        <Text style={dash.panelTitle}>Gastos ingresados manualmente</Text>
-
-        <View style={dash.grid3}>
-          <Field
-            label="Valor mov. asignado"
-            placeholder="$"
-            value={form.movAsignado}
-            onChangeText={(value) => onNumberChange("movAsignado", value)}
-            keyboardType="numeric"
-          />
-          <Field
-            label="Transfer/Uber/Estac."
-            placeholder="$"
-            value={form.transferUber}
-            onChangeText={(value) => onNumberChange("transferUber", value)}
-            keyboardType="numeric"
-          />
-          <Field
-            label="Colectivo/Bus rural/Taxi"
-            placeholder="$"
-            value={form.colectivoTaxi}
-            onChangeText={(value) => onNumberChange("colectivoTaxi", value)}
-            keyboardType="numeric"
-          />
-        </View>
-
-        <View style={dash.grid3}>
-          <Field
-            label="Peajes"
-            placeholder="$"
-            value={form.peajes}
-            onChangeText={(value) => onNumberChange("peajes", value)}
-            keyboardType="numeric"
-          />
-          <Field
-            label="Reembolsos/Descuentos"
-            placeholder="$"
-            value={form.reembolsos}
-            onChangeText={(value) => onNumberChange("reembolsos", value)}
-            keyboardType="numeric"
-          />
-          <Field
-            label="Varios"
-            placeholder="$"
-            value={form.varios}
-            onChangeText={(value) => onNumberChange("varios", value)}
-            keyboardType="numeric"
-          />
-        </View>
-
-        <View style={dash.grid3}>
-          <Field
-            label="Total asig x Cliente"
-            placeholder="$0"
-            value={`$${subtotalAsignacion.toLocaleString("es-CL")}`}
-            disabled
-          />
-          <Field
-            label="Total Asig Nomina CAS"
-            placeholder="$0"
-            value={`$${totalManual.toLocaleString("es-CL")}`}
-            disabled
-          />
-          <Field
-            label="Combustible"
-            placeholder="$"
-            value={form.copec}
-            onChangeText={(value) => onNumberChange("copec", value)}
-            keyboardType="numeric"
-          />
-        </View>
-
-        <Pressable style={dash.saveBtn} onPress={onSave}>
-          <Text style={dash.saveText}>Guardar</Text>
-        </Pressable>
-        {!!saveMsg && <Text style={dash.saveMsg}>{saveMsg}</Text>}
-      </View>
-
-      <Modal transparent visible={calendarOpen} animationType="fade">
-        <Pressable style={dash.calendarOverlay} onPress={() => setCalendarOpen(false)}>
-          <Pressable style={dash.calendarCard} onPress={() => null}>
-            <View style={dash.calendarHeader}>
-              <Pressable style={dash.calendarNavBtn} onPress={onPrevMonth}>
-                <Text style={dash.calendarNavText}>{"<"}</Text>
-              </Pressable>
-              <Text style={dash.calendarTitle}>
-                {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
-              </Text>
-              <Pressable style={dash.calendarNavBtn} onPress={onNextMonth}>
-                <Text style={dash.calendarNavText}>{">"}</Text>
-              </Pressable>
-            </View>
-
-            <View style={dash.calendarWeekRow}>
-              {weekDays.map((day) => (
-                <Text key={day} style={dash.calendarWeekText}>
-                  {day}
-                </Text>
-              ))}
-            </View>
-
-            <View style={dash.calendarGrid}>
-              {calendarCells.map((date, index) => {
-                if (!date) {
-                  return <View key={`empty-${index}`} style={dash.calendarDay} />;
-                }
-                const selected = isSameDay(date, selectedDate);
-                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                return (
-                  <Pressable
-                    key={date.toISOString()}
-                    style={[dash.calendarDay, selected && dash.calendarDaySelected]}
-                    onPress={() => onSelectDate(date)}
-                  >
-                    <Text
-                      style={[
-                        dash.calendarDayText,
-                        isWeekend && dash.calendarDayWeekend,
-                        selected && dash.calendarDayTextSelected,
-                      ]}
-                    >
-                      {date.getDate()}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Pressable style={dash.calendarCloseBtn} onPress={() => setCalendarOpen(false)}>
-              <Text style={dash.calendarCloseText}>Cerrar</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </ScrollView>
-  );
 }
+
+const styles = StyleSheet.create({
+  banner: {
+    padding: 15,
+    borderRadius: 8,
+    borderWidth: 2,
+    backgroundColor: '#fff',
+    marginBottom: 20
+  },
+  dropdownAbs: {
+    position: 'absolute',
+    top: 65,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#4a90e2', 
+    borderRadius: 4,
+    zIndex: 9999,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  dropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee'
+  }
+});

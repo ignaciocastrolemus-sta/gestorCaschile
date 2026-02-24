@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { crearViaje } from "../api/viajesGastos";
-import { obtenerMontos } from "../api/montosComuna";
 import { API_BASE } from "../config/api";
 import { normalizeText } from "../utils/textUtils";
 import {
@@ -27,11 +26,14 @@ export default function useSecretariaForm(authToken) {
     fecha: formatFechaHoy(),
     fechaInicio: formatFechaHoy(),
     fechaTermino: formatFechaHoy(),
+    idCLiente: "",
+    idSemana: "",
+    idCapacitador: "",
     capacitador: "",
-    jefe: "",
-    region: "Metropolitana de Santiago",
+    region: "",
     comuna: "",
     modalidad: "",
+    observacion: "",
     dias: "",
     desayuno: "",
     almuerzo: "",
@@ -52,6 +54,7 @@ export default function useSecretariaForm(authToken) {
     copec: "",
   };
   const [form, setForm] = useState({ ...emptyForm });
+  const[tarifasBackup, setTarifasBackup] = useState({});
 
   const isValidFecha = (value) => !!parseFecha(value);
 
@@ -60,7 +63,6 @@ export default function useSecretariaForm(authToken) {
       return "Usa el formato DD/MM/AAAA en inicio y termino.";
     }
     if (!form.capacitador.trim()) return "Capacitador es obligatorio.";
-    if (!form.jefe.trim()) return "Jefe es obligatorio.";
     if (!form.region.trim()) return "Region es obligatoria.";
     if (!form.comuna.trim()) return "Comuna es obligatoria.";
     if (!form.modalidad.trim()) return "Modalidad es obligatoria.";
@@ -112,22 +114,35 @@ export default function useSecretariaForm(authToken) {
     updateFormConFechas("fechaInicio", formatFecha(date));
   };
 
-  const updateNumero = (campo, value) => {
-    const limpio = value.replace(/[^\d]/g, "");
-    if (campo === "dias") {
-      updateFormConFechas(campo, limpio);
-      return;
+  const updateNumero = (campo, valor) => {
+    // Convertimos en string, si viene null o undefined, lo dejamos como string vacío.
+    const textoSeguro = (valor !== null && valor !== undefined) ? valor.toString() : "";
+    // se hace replace sabiendo que es texto
+    const numeroLimpio = textoSeguro.replace(/[^0-9]/g, "");
+    
+    // Se guarda en el estado principal
+    setForm(prev => ({ ...prev, [campo]: numeroLimpio }));
+
+    // LO NUEVO: Se guarda en el respaldo SOLO si es un monto de la matriz
+    const camposTarifa = ["desayuno", "almuerzo", "once", "cena", "viatico"];
+    if (camposTarifa.includes(campo)) {
+      setTarifasBackup(prev => ({ ...prev, [campo]: numeroLimpio }));
     }
-    updateForm(campo, limpio);
   };
 
   const toggleNoAsignacion = (campoFlag, campoValor) => {
     setForm((prev) => {
-      const next = !prev[campoFlag];
+      const next = !prev[campoFlag]; // true si marca "No Aplica"
+      
+      // LO NUEVO: Buscamos en el backup al desmarcar
+      const valorRecuperado = tarifasBackup[campoValor] !== undefined 
+                              ? tarifasBackup[campoValor] 
+                              : prev[campoValor];
+
       return {
         ...prev,
         [campoFlag]: next,
-        [campoValor]: next ? "0" : prev[campoValor],
+        [campoValor]: next ? "0" : valorRecuperado,
       };
     });
   };
@@ -140,40 +155,49 @@ export default function useSecretariaForm(authToken) {
       return;
     }
     if (!authToken) {
-      Alert.alert("Sesion requerida", "Inicia sesion para guardar.");
+      Alert.alert("Sesión requerida", "Inicia sesión para guardar.");
       return;
     }
+
+    // 1. Transformar fecha DD/MM/YYYY a YYYY-MM-DD para el DateOnly de .NET
+    const [dia, mes, anio] = form.fechaInicio.split("/");
+    const fechaInicioIso = `${anio}-${mes}-${dia}`;
+
+    // 2. Construir el DTO exacto (CrearViajeDto)
     const payload = {
-      fecha: form.fecha,
-      fechaInicio: form.fechaInicio,
-      fechaTermino: form.fechaTermino,
-      capacitador: form.capacitador,
-      jefe: form.jefe,
-      tipoViaje: tipoViaje === "santiago" ? "Santiago" : "Regiones",
-      region: form.region,
-      comuna: form.comuna,
+      idUsuario: Number(form.idCapacitador), // Extraído desde el dropdown
+      idCliente: Number(form.idCliente),     // Extraído desde el dropdown
+      codigoOt: form.modalidad || "S/N",
       modalidad: form.modalidad,
+      observacion: form.observacion,
+      fechaInicio: fechaInicioIso,
       dias: Number(form.dias),
-      desayuno: Number(form.desayuno),
-      almuerzo: Number(form.almuerzo),
-      once: Number(form.once),
-      cena: Number(form.cena),
-      viatico: Number(form.viatico),
-      movAsignado: Number(form.movAsignado),
-      transferUber: Number(form.transferUber),
-      colectivoTaxi: Number(form.colectivoTaxi),
-      peajes: Number(form.peajes),
-      reembolsos: Number(form.reembolsos),
-      varios: Number(form.varios),
-      copec: Number(form.copec),
+      
+      // Toggles de Alimentación (El backend pide booleanos "Incluye", tu form usa "NoAplica")
+      incluyeDesayuno: !form.noDesayuno,
+      incluyeAlmuerzo: !form.noAlmuerzo,
+      incluyeOnce: !form.noOnce,
+      incluyeCena: !form.noCena,
+      incluyeViatico: !form.noViatico,
+
+      // Gastos Manuales (Agrupando algunos valores según tu UI)
+      montoMovilizacion: Number(form.movAsignado || 0) + Number(form.colectivoTaxi || 0),
+      montoTransferUber: Number(form.transferUber || 0),
+      montoPeajes: Number(form.peajes || 0),
+      montoCombustible: Number(form.copec || 0),
+      otrosGastos: Number(form.varios || 0) + Number(form.reembolsos || 0),
     };
 
     try {
+      // 3. Petición a la API
       await crearViaje(payload, authToken);
-      Alert.alert("Guardado", "Datos guardados.");
-      setSaveMsg("Guardado.");
+      Alert.alert("Éxito", "Asignación de viaje guardada correctamente.");
+      setSaveMsg("Guardado con éxito.");
+      resetSecretaria(); // Limpiar el formulario
     } catch (error) {
-      Alert.alert("Error", error?.message || "No se pudo guardar.");
+      // C# arroja excepciones de regla de negocio (InvalidOperationException)
+      // Aseguramos que el usuario lea si "la semana está cerrada" o "sin tarifa"
+      Alert.alert("Error de Validación", error?.message || "No se pudo guardar la asignación.");
       setSaveMsg("Error al guardar.");
     }
   };

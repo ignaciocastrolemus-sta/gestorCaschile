@@ -5,7 +5,7 @@ import { decodeJwt } from "../utils/jwt";
 import { SESSION_MS, saveSession, clearSession, loadSession } from "../utils/session";
 import { API_BASE } from "../config/api";
 
-const ALLOWED_ROLES = ["Administrador", "Secretaria", "Usuario Terreno", "Contadora"];
+const ALLOWED_ROLES = ["Administrador", "Secretaria", "Usuario Terreno", "Contadora","Capacitador"];
 const ALLOWED_ROLES_SET = new Set(ALLOWED_ROLES.map((r) => r.toLowerCase()));
 
 export default function useAuth() {

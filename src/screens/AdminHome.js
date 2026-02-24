@@ -8,6 +8,7 @@ import AdminRoles from "./AdminRoles";
 import AdminPeriodos from "./AdminPeriodos";
 import AdminCatalogos from "./AdminCatalogos";
 import AdminTarifas from "./AdminTarifas";
+import AsignacionSemanal from "./AsignacionSemanal";
 import ListadoAsignacionesSemanales from "./ListadoAsignacionesSemanales";
 import EncuadreRendiciones from "./EncuadreRendiciones";
 
@@ -20,6 +21,7 @@ export default function AdminHome({ token, onLogout, email = "" }) {
     if (activeMenu === "roles") return "Roles";
     if (activeMenu === "usuarios") return "Usuarios";
     if (activeMenu === "periodos") return "Periodos";
+    if (activeMenu === "Semanas Operativas")
     if (activeMenu === "encuadre") return "Encuadre";
     if (activeMenu === "tarifas") return "Tarifas";
     if (activeMenu === "catalogos") return "Catalogos";
@@ -81,6 +83,11 @@ export default function AdminHome({ token, onLogout, email = "" }) {
             active={activeMenu === "periodos"}
             onPress={() => setActiveMenu("periodos")}
           />
+          <MenuItem
+            label="Semanas"
+            active={activeMenu === "semanas"}
+            onPress={() => setActiveMenu("semanas")}
+          />
           <MenuItem label="Roles" active={activeMenu === "roles"} onPress={() => setActiveMenu("roles")} />
           <MenuItem
             label="Encuadre"
@@ -98,6 +105,8 @@ export default function AdminHome({ token, onLogout, email = "" }) {
             <AdminCatalogos token={token} />
           ) : activeMenu === "tarifas" ? (
             <AdminTarifas token={token} />
+          ) : activeMenu === "semanas" ? ( // <-- 4. NUEVO: Renderizado del componente si la pestaña está activa
+            <AsignacionSemanal token={token} />
           ) : activeMenu === "listados" ? (
             <ListadoAsignacionesSemanales token={token} />
           ) : activeMenu === "periodos" ? (

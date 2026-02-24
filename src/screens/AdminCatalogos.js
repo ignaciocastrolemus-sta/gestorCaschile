@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { use, useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
@@ -98,6 +98,7 @@ export default function AdminCatalogos({ token }) {
   const [activeTab, setActiveTab] = useState("clientes");
   const [editing, setEditing] = useState(null);
   const [nombre, setNombre] = useState("");
+  const [rut, setRut] = useState("");
   const [extra, setExtra] = useState("");
   const [showInactivos, setShowInactivos] = useState(false);
 
@@ -131,6 +132,7 @@ export default function AdminCatalogos({ token }) {
   const resetForm = () => {
     setEditing(null);
     setNombre("");
+    setRut("");
     setExtra("");
   };
 
@@ -150,7 +152,7 @@ export default function AdminCatalogos({ token }) {
         ? { nombre: nombre.trim(), romano: extra.trim() }
         : isComunas
           ? { nombre: nombre.trim(), regionId: Number(extra) }
-          : { nombre: nombre.trim(), comunaId: Number(extra) };
+          : { nombre: nombre.trim(), rutCliente: rut.trim(),comunaId: Number(extra) };
 
       // Soft delete: Activo (si el backend lo soporta). Si no existe en backend, se ignora.
       const payload = { ...payloadBase, activo: editing ? isActivo(editing) : true };
@@ -169,6 +171,7 @@ export default function AdminCatalogos({ token }) {
   const onEdit = (row) => {
     setEditing(row);
     setNombre(row?.nombre || row?.Nombre || "");
+    setRut(row?.rutCliente || row?.RutCliente || "");
     if (isRegiones) {
       setExtra(row?.romano || row?.Romano || "");
     } else if (isComunas) {
@@ -267,6 +270,20 @@ export default function AdminCatalogos({ token }) {
           placeholderTextColor={COLORS.muted}
           style={dash.input}
         />
+
+        {isClientes && (
+          <>
+            <Text style={dash.label}>RUT</Text>
+            <TextInput
+              value={rut}
+              onChangeText={setRut}
+              placeholder="Ej: 12.345.678-K"
+              placeholderTextColor={COLORS.muted}
+              style={dash.input}
+              autoCapitalize="characters" // Para que la 'K' salga siempre en mayúscula
+            />
+          </>
+        )}
 
         <Text style={dash.label}>{isRegiones ? "Romano" : isComunas ? "RegionId" : "ComunaId"}</Text>
         <TextInput

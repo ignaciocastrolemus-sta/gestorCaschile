@@ -9,7 +9,6 @@ async function fetchJson(url, token) {
 }
 
 function isActivo(row) {
-  // Compat: si backend aun no tiene Activo, consideramos activo por defecto.
   const raw = row?.activo ?? row?.Activo;
   return raw === undefined ? true : Boolean(raw);
 }
@@ -18,22 +17,18 @@ function filtrarActivos(data) {
   return Array.isArray(data) ? data.filter(isActivo) : data;
 }
 
-// Catalogo: regiones
 export async function obtenerRegiones(token) {
   const data = await fetchJson(`${API_BASE}/Regiones`, token);
   return filtrarActivos(data);
 }
 
-// Catalogo: comunas
 export async function obtenerComunas(token) {
   const data = await fetchJson(`${API_BASE}/Comunas`, token);
   return filtrarActivos(data);
 }
 
-// Catalogo: capacitadores
 export async function obtenerCapacitadores(token) {
-  const data = await fetchJson(`${API_BASE}/Usuarios/rol/Usuario%20Terreno`, token);
-  // Normalizar al shape que espera el frontend: { id, nombre }
+  const data = await fetchJson(`${API_BASE}/Usuarios/rol/Capacitador`, token);
   return data.map(u => ({
     id: u.id ?? u.idUsuario,
     nombre: u.nombre ?? u.nombreCompleto,
@@ -41,16 +36,24 @@ export async function obtenerCapacitadores(token) {
   }));
 }
 
-// Catalogo: jefes de proyecto
-export async function obtenerJefesProyecto(token) {
-  const data = await fetchJson(`${API_BASE}/JefesProyecto`, token);
-  return filtrarActivos(data);
+export async function obtenerMunicipios(regionId, token) {
+  const path = regionId ? `/Comunas/${regionId}` : `/Comunas`;
+  return fetchJson(`${API_BASE}/Comunas/region/${regionId}`, token);
 }
 
-// Catalogo: municipios por region
-export async function obtenerMunicipios(regionId, token) {
-  if (!regionId){
-    return fetchJson(`${API_BASE}/Comunas`, token);
-  }
-  return fetchJson(`${API_BASE}/Comunas/${regionId}`, token);
+// --- NUEVAS FUNCIONES CORREGIDAS ---
+
+export async function obtenerSemanas(token) {
+  // El controlador en tu backend es AsignacionSemanal
+  return fetchJson(`${API_BASE}/AsignacionSemanals`, token);
+}
+
+export async function obtenerClientesPorComuna(idComuna, token) {
+  // El controlador es Cliente y recibe idComuna por query
+  return fetchJson(`${API_BASE}/Clientes?idComuna=${idComuna}`, token);
+}
+
+export async function obtenerTarifasPorCliente(clienteId, token) {
+  // Ruta: AsignacionClientes/cliente/{id}
+  return fetchJson(`${API_BASE}/AsignacionClientes/cliente/${clienteId}`, token);
 }
