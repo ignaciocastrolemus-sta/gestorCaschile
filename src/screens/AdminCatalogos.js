@@ -141,6 +141,7 @@ export default function AdminCatalogos({ token }) {
   }, [isRegiones, isComunas]);
 
   const onSave = async () => {
+    if (loading) return;
     if (!nombre.trim()) {
       setError("Nombre es obligatorio.");
       return;
@@ -179,6 +180,7 @@ export default function AdminCatalogos({ token }) {
   };
 
   const onDelete = (row) => {
+    if (loading) return;
     const nombreRow = row?.nombre || row?.Nombre || "este registro";
     const msg = `Eliminar ${nombreRow}?`;
     const proceed = typeof window !== "undefined" && window.confirm ? window.confirm(msg) : undefined;
@@ -198,6 +200,7 @@ export default function AdminCatalogos({ token }) {
   };
 
   const onToggleActivo = async (row) => {
+    if (loading) return;
     // Desactivar/Activar sin borrar (para no romper historiales).
     try {
       const nextActivo = !isActivo(row);
@@ -278,11 +281,11 @@ export default function AdminCatalogos({ token }) {
         />
 
         <View style={styles.btnRow}>
-          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave}>
+          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>{loading ? "Guardando..." : "Guardar"}</Text>
           </Pressable>
           {editing && (
-            <Pressable style={styles.secondaryBtn} onPress={resetForm}>
+            <Pressable style={styles.secondaryBtn} onPress={resetForm} disabled={loading}>
               <Text style={styles.secondaryText}>Cancelar</Text>
             </Pressable>
           )}
@@ -320,13 +323,13 @@ export default function AdminCatalogos({ token }) {
                 <Text style={styles.listSub}>Activo: {isActivo(row) ? "Si" : "No"}</Text>
               </View>
               <View style={styles.actions}>
-                <Pressable style={styles.smallBtn} onPress={() => onEdit(row)}>
+                <Pressable style={styles.smallBtn} onPress={() => onEdit(row)} disabled={loading}>
                   <Text style={styles.smallBtnText}>Editar</Text>
                 </Pressable>
-                <Pressable style={styles.smallBtn} onPress={() => onToggleActivo(row)}>
+                <Pressable style={styles.smallBtn} onPress={() => onToggleActivo(row)} disabled={loading}>
                   <Text style={styles.smallBtnText}>{isActivo(row) ? "Desactivar" : "Activar"}</Text>
                 </Pressable>
-                <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(row)}>
+                <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(row)} disabled={loading}>
                   <Text style={styles.smallBtnText}>Eliminar</Text>
                 </Pressable>
               </View>

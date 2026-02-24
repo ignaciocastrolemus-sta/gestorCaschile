@@ -1,11 +1,11 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useCallback } from "react";
-import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api/httpClient";
 
 // Admin Roles: crear/editar/eliminar roles
 
@@ -22,18 +22,7 @@ export default function AdminRoles({ token, title }) {
 
   const load = useCallback(async () => {
     try {
-      const [resRoles, resUsers] = await Promise.all([
-        fetch(`${API_BASE}/Roles`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_BASE}/Usuarios`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-      if (!resRoles.ok) throw new Error(await resRoles.text());
-      if (!resUsers.ok) throw new Error(await resUsers.text());
-      const data = await resRoles.json();
-      const users = await resUsers.json();
+      const [data, users] = await Promise.all([apiGet("/Roles", { token }), apiGet("/Usuarios", { token })]);
       setRoles(Array.isArray(data) ? data : []);
       if (Array.isArray(users)) {
         const counts = {};
@@ -64,6 +53,7 @@ export default function AdminRoles({ token, title }) {
   }, [load]);
 
   const onSave = async () => {
+    if (loading) return;
     if (!nombre.trim()) {
       setError("Nombre es obligatorio.");
       return;
@@ -71,20 +61,14 @@ export default function AdminRoles({ token, title }) {
     try {
       setLoading(true);
       const payload = { nombre: nombre.trim() };
-      const url = editing ? `${API_BASE}/Roles/${editing.id}` : `${API_BASE}/Roles`;
-      const method = editing ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      if (editing) {
+        await apiPut(`/Roles/${editing.id}`, payload, { token });
+      } else {
+        await apiPost("/Roles", payload, { token });
+      }
       setNombre("");
       setEditing(null);
-      load();
+      await load();
     } catch (e) {
       setError(e?.message || "Error al guardar.");
     } finally {
@@ -96,6 +80,7 @@ export default function AdminRoles({ token, title }) {
   const isProtected = (rol) => protectedRoles.has(roleName(rol).toLowerCase());
 
   const onEdit = (rol) => {
+    if (loading) return;
     if (isProtected(rol)) {
       Alert.alert("Rol protegido", "Este rol es parte del sistema y no se puede editar.");
       return;
@@ -105,6 +90,7 @@ export default function AdminRoles({ token, title }) {
   };
 
   const onDelete = async (rol) => {
+    if (loading) return;
     if (isProtected(rol)) {
       Alert.alert("Rol protegido", "Este rol es parte del sistema y no se puede eliminar.");
       return;
@@ -132,14 +118,11 @@ export default function AdminRoles({ token, title }) {
   };
 
   const doDelete = async (rol) => {
+    if (loading) return;
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/Roles/${rol.id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      load();
+      await apiDelete(`/Roles/${rol.id}`, { token });
+      await load();
     } catch (e) {
       setError(e?.message || "No se pudo eliminar.");
     } finally {
@@ -180,7 +163,7 @@ export default function AdminRoles({ token, title }) {
           style={dash.input}
         />
         <View style={styles.btnRow}>
-          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave}>
+          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>
               {loading ? "Guardando..." : editing ? "Guardar cambios" : "Crear rol"}
             </Text>
@@ -192,6 +175,7 @@ export default function AdminRoles({ token, title }) {
                 setEditing(null);
                 setNombre("");
               }}
+              disabled={loading}
             >
               <Text style={styles.secondaryText}>Cancelar</Text>
             </Pressable>
@@ -253,10 +237,11 @@ export default function AdminRoles({ token, title }) {
                     <Pressable
                       style={[styles.smallBtn, protegido && styles.smallBtnDisabled]}
                       onPress={() => onEdit(rol)}
+                      disabled={loading}
                     >
                       <Text style={styles.smallBtnText}>Editar</Text>
                     </Pressable>
-                    <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(rol)}>
+                    <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(rol)} disabled={loading}>
                       <Text style={styles.smallBtnText}>Eliminar</Text>
                     </Pressable>
                   </View>

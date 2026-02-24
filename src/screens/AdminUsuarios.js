@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
-import { API_BASE } from "../config/api";
+import { apiGet, apiPost, apiPut } from "../api/httpClient";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import { bajaSeguraUsuario, buildAnonUserView } from "../api/usuarios";
 import dash from "../styles/dashboardStyles";
@@ -106,14 +106,7 @@ export default function AdminUsuarios({ token, title }) {
 
   const load = useCallback(async () => {
     try {
-      const [resUsers, resRoles] = await Promise.all([
-        fetch(`${API_BASE}/Usuarios`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/Roles`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      if (!resUsers.ok) throw new Error(await resUsers.text());
-      if (!resRoles.ok) throw new Error(await resRoles.text());
-      const usersData = await resUsers.json();
-      const rolesData = await resRoles.json();
+      const [usersData, rolesData] = await Promise.all([apiGet("/Usuarios", { token }), apiGet("/Roles", { token })]);
       setUsuarios(Array.isArray(usersData) ? usersData : []);
       setRoles(Array.isArray(rolesData) ? rolesData : []);
       setError("");
@@ -180,6 +173,7 @@ export default function AdminUsuarios({ token, title }) {
   };
 
   const onSave = async () => {
+    if (loading) return;
     setInfo("");
     if (!form.nombre.trim() || !form.email.trim()) {
       setError("Nombre y email son obligatorios.");
@@ -234,19 +228,13 @@ export default function AdminUsuarios({ token, title }) {
       if (form.password.trim()) {
         payload.password = form.password;
       }
-      const url = editing ? `${API_BASE}/Usuarios/${editing.id}` : `${API_BASE}/Usuarios`;
-      const method = editing ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      if (editing) {
+        await apiPut(`/Usuarios/${editing.id}`, payload, { token });
+      } else {
+        await apiPost("/Usuarios", payload, { token });
+      }
       resetForm();
-      load();
+      await load();
       setInfo(editing ? "Usuario actualizado." : "Usuario creado.");
     } catch (e) {
       setError(e?.message || "Error al guardar.");
@@ -256,6 +244,7 @@ export default function AdminUsuarios({ token, title }) {
   };
 
   const onEdit = (u) => {
+    if (loading) return;
     if (isUsuarioAnonimizado(u)) {
       setError("Usuario anonimizado: no se puede editar.");
       return;
@@ -277,6 +266,7 @@ export default function AdminUsuarios({ token, title }) {
   };
 
   const onDeleteAccount = async (u) => {
+    if (loading) return;
     setError("");
     setInfo("");
     const confirmar = async () => {
@@ -490,13 +480,13 @@ export default function AdminUsuarios({ token, title }) {
         </View>
 
         <View style={styles.btnRow}>
-          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave}>
+          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>
               {loading ? "Guardando..." : editing ? "Guardar cambios" : "Crear usuario"}
             </Text>
           </Pressable>
           {editing && (
-            <Pressable style={styles.secondaryBtn} onPress={resetForm}>
+            <Pressable style={styles.secondaryBtn} onPress={resetForm} disabled={loading}>
               <Text style={styles.secondaryText}>Cancelar</Text>
             </Pressable>
           )}
@@ -573,10 +563,10 @@ export default function AdminUsuarios({ token, title }) {
                   </Text>
                 </View>
                 <View style={styles.actions}>
-                  <Pressable style={styles.smallBtn} onPress={() => onEdit(u)}>
+                  <Pressable style={styles.smallBtn} onPress={() => onEdit(u)} disabled={loading}>
                     <Text style={styles.smallBtnText}>Editar</Text>
                   </Pressable>
-                  <Pressable style={styles.smallBtnDanger} onPress={() => onDeleteAccount(u)}>
+                  <Pressable style={styles.smallBtnDanger} onPress={() => onDeleteAccount(u)} disabled={loading}>
                     <Text style={styles.smallBtnText}>Baja segura</Text>
                   </Pressable>
                 </View>

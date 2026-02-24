@@ -34,6 +34,10 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [expandedCaps, setExpandedCaps] = useState({});
   const [visibleGroups, setVisibleGroups] = useState(6);
   const [historialMes, setHistorialMes] = useState("todos");
+  const [resolviendoById, setResolviendoById] = useState({});
+  const [justificandoById, setJustificandoById] = useState({});
+  const [levantandoById, setLevantandoById] = useState({});
+  const [registrandoSaldoById, setRegistrandoSaldoById] = useState({});
 
   // Resumen rapido para priorizar revision.
   const kpis = useMemo(() => {
@@ -168,7 +172,9 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   };
 
   const onResolver = async (id, aprobar) => {
+    if (resolviendoById[id]) return;
     try {
+      setResolviendoById((prev) => ({ ...prev, [id]: true }));
       setActionMsg("");
       const mensaje = (msgById[id] || "").trim();
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/resolver`, {
@@ -186,15 +192,19 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setActionMsg(e?.message || "Error al resolver rendicion.");
+    } finally {
+      setResolviendoById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onJustificar = async (id) => {
+    if (justificandoById[id]) return;
     const motivo = typeof window !== "undefined" ? (window.prompt("Motivo (ej: Licencia medica)", "Licencia medica") || "").trim() : "";
     if (!motivo) return;
     const fechaRaw = typeof window !== "undefined" ? window.prompt("Fecha hasta (YYYY-MM-DD, opcional)", "") || "" : "";
     const observacion = typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "") || "" : "";
     try {
+      setJustificandoById((prev) => ({ ...prev, [id]: true }));
       const payload = {
         motivo,
         observacion,
@@ -214,11 +224,15 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setActionMsg(e?.message || "No se pudo justificar.");
+    } finally {
+      setJustificandoById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onLevantarJustificacion = async (id) => {
+    if (levantandoById[id]) return;
     try {
+      setLevantandoById((prev) => ({ ...prev, [id]: true }));
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/levantar-justificacion`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -233,10 +247,13 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setActionMsg(e?.message || "No se pudo levantar justificacion.");
+    } finally {
+      setLevantandoById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onRegistrarSaldo = async (r) => {
+    if (registrandoSaldoById[r.id]) return;
     const rawMonto =
       typeof window !== "undefined" ? window.prompt("Monto a registrar", String(r.saldoPendiente || "")) : "";
     const monto = Number(String(rawMonto || "").replace(/[^\d.,-]/g, "").replace(",", "."));
@@ -245,6 +262,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "Pago/registro de saldo") || "" : "";
 
     try {
+      setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: true }));
       const res = await fetch(`${API_BASE}/Rendiciones/${r.id}/registrar-saldo`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -258,6 +276,8 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       loadSaldos(saldosPage);
     } catch (e) {
       setActionMsg(e?.message || "No se pudo registrar saldo.");
+    } finally {
+      setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: false }));
     }
   };
 
@@ -555,9 +575,17 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                           </View>
                           <View style={{ gap: 8 }}>
                             {canRegistrar ? (
-                              <Pressable style={styles.approveBtn} onPress={() => onRegistrarSaldo(r)}>
+                              <Pressable
+                                style={[styles.approveBtn, registrandoSaldoById[r.id] && { opacity: 0.7 }]}
+                                onPress={() => onRegistrarSaldo(r)}
+                                disabled={!!registrandoSaldoById[r.id]}
+                              >
                                 <Text style={styles.approveText}>
-                                  {resolveTipoResultado(r) === "Reembolso" ? "Registrar pago" : "Registrar devolucion"}
+                                  {registrandoSaldoById[r.id]
+                                    ? "Registrando..."
+                                    : resolveTipoResultado(r) === "Reembolso"
+                                      ? "Registrar pago"
+                                      : "Registrar devolucion"}
                                 </Text>
                               </Pressable>
                             ) : (
@@ -611,8 +639,12 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                   Motivo: {r?.motivoPendiente || "-"} | Hasta: {r?.pendienteHasta ? formatFechaCorta(r.pendienteHasta) : "Sin fecha"}
                 </Text>
                 <View style={styles.actionsRow}>
-                  <Pressable style={styles.historyBtn} onPress={() => onLevantarJustificacion(r.id)}>
-                    <Text style={styles.historyBtnText}>Levantar justificacion</Text>
+                  <Pressable
+                    style={[styles.historyBtn, levantandoById[r.id] && { opacity: 0.7 }]}
+                    onPress={() => onLevantarJustificacion(r.id)}
+                    disabled={!!levantandoById[r.id]}
+                  >
+                    <Text style={styles.historyBtnText}>{levantandoById[r.id] ? "Levantando..." : "Levantar justificacion"}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -825,14 +857,26 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                         />
 
                         <View style={styles.actionsRow}>
-                          <Pressable style={styles.approveBtn} onPress={() => onResolver(r.id, true)}>
-                            <Text style={styles.approveText}>Aprobar</Text>
+                          <Pressable
+                            style={[styles.approveBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
+                            onPress={() => onResolver(r.id, true)}
+                            disabled={!!resolviendoById[r.id]}
+                          >
+                            <Text style={styles.approveText}>{resolviendoById[r.id] ? "Procesando..." : "Aprobar"}</Text>
                           </Pressable>
-                          <Pressable style={styles.historyBtn} onPress={() => onJustificar(r.id)}>
-                            <Text style={styles.historyBtnText}>Justificar</Text>
+                          <Pressable
+                            style={[styles.historyBtn, justificandoById[r.id] && { opacity: 0.7 }]}
+                            onPress={() => onJustificar(r.id)}
+                            disabled={!!justificandoById[r.id] || !!resolviendoById[r.id]}
+                          >
+                            <Text style={styles.historyBtnText}>{justificandoById[r.id] ? "Justificando..." : "Justificar"}</Text>
                           </Pressable>
-                          <Pressable style={styles.rejectBtn} onPress={() => onResolver(r.id, false)}>
-                            <Text style={styles.rejectText}>Rechazar</Text>
+                          <Pressable
+                            style={[styles.rejectBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
+                            onPress={() => onResolver(r.id, false)}
+                            disabled={!!resolviendoById[r.id]}
+                          >
+                            <Text style={styles.rejectText}>{resolviendoById[r.id] ? "Procesando..." : "Rechazar"}</Text>
                           </Pressable>
                         </View>
                         <Text style={styles.ruleHint}>

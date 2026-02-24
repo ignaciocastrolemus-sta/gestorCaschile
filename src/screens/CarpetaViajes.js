@@ -32,6 +32,10 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const [expandedCaps, setExpandedCaps] = useState({});
   const [visibleGroups, setVisibleGroups] = useState(6);
   const [historialMes, setHistorialMes] = useState("todos");
+  const [sendingContadoraById, setSendingContadoraById] = useState({});
+  const [justifyingById, setJustifyingById] = useState({});
+  const [liftingById, setLiftingById] = useState({});
+  const [registrandoSaldoById, setRegistrandoSaldoById] = useState({});
 
   const totalAsignado = items.reduce((acc, it) => acc + Number(it.totalAsignado || 0), 0);
   const totalRendido = items.reduce((acc, it) => acc + Number(it.totalRendido || 0), 0);
@@ -130,7 +134,9 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   }, [load, loadSaldos, loadJustificadas]);
 
   const onEnviarContadora = async (id) => {
+    if (sendingContadoraById[id]) return;
     try {
+      setSendingContadoraById((prev) => ({ ...prev, [id]: true }));
       setInfo("");
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/enviar-contadora`, {
         method: "POST",
@@ -147,15 +153,19 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setInfo(e?.message || "No se pudo enviar.");
+    } finally {
+      setSendingContadoraById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onJustificar = async (id) => {
+    if (justifyingById[id]) return;
     const motivo = typeof window !== "undefined" ? (window.prompt("Motivo (ej: Licencia medica)", "Licencia medica") || "").trim() : "";
     if (!motivo) return;
     const fechaRaw = typeof window !== "undefined" ? window.prompt("Fecha hasta (YYYY-MM-DD, opcional)", "") || "" : "";
     const observacion = typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "") || "" : "";
     try {
+      setJustifyingById((prev) => ({ ...prev, [id]: true }));
       const payload = {
         motivo,
         observacion,
@@ -175,11 +185,15 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setInfo(e?.message || "No se pudo justificar.");
+    } finally {
+      setJustifyingById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onLevantarJustificacion = async (id) => {
+    if (liftingById[id]) return;
     try {
+      setLiftingById((prev) => ({ ...prev, [id]: true }));
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/levantar-justificacion`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -194,10 +208,13 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setInfo(e?.message || "No se pudo levantar justificacion.");
+    } finally {
+      setLiftingById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onRegistrarSaldo = async (r) => {
+    if (registrandoSaldoById[r.id]) return;
     const rawMonto =
       typeof window !== "undefined" ? window.prompt("Monto a registrar", String(r.saldoPendiente || "")) : "";
     const monto = Number(String(rawMonto || "").replace(/[^\d.,-]/g, "").replace(",", "."));
@@ -205,6 +222,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     const observacion =
       typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "Registro de saldo") || "" : "";
     try {
+      setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: true }));
       const res = await fetch(`${API_BASE}/Rendiciones/${r.id}/registrar-saldo`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -218,6 +236,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadSaldos(saldosPage);
     } catch (e) {
       setInfo(e?.message || "No se pudo registrar saldo.");
+    } finally {
+      setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: false }));
     }
   };
 
@@ -466,6 +486,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                         data={item}
                         onEnviar={() => onEnviarContadora(item.id)}
                         onJustificar={() => onJustificar(item.id)}
+                        sending={!!sendingContadoraById[item.id]}
+                        justifying={!!justifyingById[item.id]}
                       />
                     ))
                   : null}
@@ -520,8 +542,11 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                   <Pressable
                     style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
                     onPress={() => onLevantarJustificacion(r.id)}
+                    disabled={!!liftingById[r.id]}
                   >
-                    <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Levantar justificacion</Text>
+                    <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>
+                      {liftingById[r.id] ? "Levantando..." : "Levantar justificacion"}
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -604,9 +629,17 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                           </View>
                           <View style={{ gap: 8 }}>
                             {canRegistrar ? (
-                              <Pressable style={[dash.docBtn, { backgroundColor: "#1D4ED8" }]} onPress={() => onRegistrarSaldo(r)}>
+                              <Pressable
+                                style={[dash.docBtn, { backgroundColor: "#1D4ED8", opacity: registrandoSaldoById[r.id] ? 0.7 : 1 }]}
+                                onPress={() => onRegistrarSaldo(r)}
+                                disabled={!!registrandoSaldoById[r.id]}
+                              >
                                 <Text style={dash.docBtnText}>
-                                  {resolveTipoResultado(r) === "Reembolso" ? "Registrar pago" : "Registrar devolucion"}
+                                  {registrandoSaldoById[r.id]
+                                    ? "Registrando..."
+                                    : resolveTipoResultado(r) === "Reembolso"
+                                      ? "Registrar pago"
+                                      : "Registrar devolucion"}
                                 </Text>
                               </Pressable>
                             ) : (
@@ -750,7 +783,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   );
 }
 
-function ViajeRowCard({ data, onEnviar, onJustificar }) {
+function ViajeRowCard({ data, onEnviar, onJustificar, sending = false, justifying = false }) {
   const onDownload = () => {
     Alert.alert("Adjuntos", "Los adjuntos se validan en backend. Descarga sera agregada luego.");
   };
@@ -785,14 +818,25 @@ function ViajeRowCard({ data, onEnviar, onJustificar }) {
         <Text style={[dash.docSub, { color: "#1D4ED8", fontWeight: "800" }]}>{guidance.prompt}</Text>
       </View>
       <View style={{ gap: 8 }}>
-        <Pressable style={[dash.docBtn, { backgroundColor: "#1D4ED8" }]} onPress={onEnviar}>
-          <Text style={dash.docBtnText}>Enviar a contadora</Text>
+        <Pressable
+          style={[dash.docBtn, { backgroundColor: "#1D4ED8", opacity: sending ? 0.7 : 1 }]}
+          onPress={onEnviar}
+          disabled={sending}
+        >
+          <Text style={dash.docBtnText}>{sending ? "Enviando..." : "Enviar a contadora"}</Text>
         </Pressable>
         <Pressable style={dash.docBtn} onPress={onDownload}>
           <Text style={dash.docBtnText}>Ver adjuntos</Text>
         </Pressable>
-        <Pressable style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]} onPress={onJustificar}>
-          <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Justificar</Text>
+        <Pressable
+          style={[
+            dash.docBtn,
+            { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF", opacity: justifying ? 0.7 : 1 },
+          ]}
+          onPress={onJustificar}
+          disabled={justifying}
+        >
+          <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>{justifying ? "Justificando..." : "Justificar"}</Text>
         </Pressable>
       </View>
     </View>

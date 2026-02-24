@@ -123,6 +123,7 @@ export default function AdminTarifas({ token }) {
   };
 
   const onSave = async () => {
+    if (loading) return;
     if (!form.regionId || !form.municipio.trim() || !form.periodo) {
       setError("Region, Municipio y Periodo son obligatorios.");
       return;
@@ -178,6 +179,7 @@ export default function AdminTarifas({ token }) {
   };
 
   const onDelete = (t) => {
+    if (loading) return;
     const msg = `¿Eliminar tarifa de ${t.municipio || t.Municipio}?`;
     const proceed = typeof window !== "undefined" && window.confirm ? window.confirm(msg) : undefined;
     if (proceed === false) return;
@@ -192,6 +194,7 @@ export default function AdminTarifas({ token }) {
   };
 
   const doDelete = async (id) => {
+    if (loading) return;
     try {
       setError("");
       setLoading(true);
@@ -380,11 +383,11 @@ export default function AdminTarifas({ token }) {
         </View>
 
         <View style={styles.btnRow}>
-          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave}>
+          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>{loading ? "Guardando..." : "Guardar"}</Text>
           </Pressable>
           {editing && (
-            <Pressable style={styles.secondaryBtn} onPress={resetForm}>
+            <Pressable style={styles.secondaryBtn} onPress={resetForm} disabled={loading}>
               <Text style={styles.secondaryText}>Cancelar</Text>
             </Pressable>
           )}
@@ -490,10 +493,10 @@ export default function AdminTarifas({ token }) {
                   <Text style={styles.amountItem}>Viatico: {t.viatico ?? t.Viatico}</Text>
                 </View>
                 <View style={styles.actions}>
-                  <Pressable style={styles.smallBtn} onPress={() => onEdit(t)}>
+                  <Pressable style={styles.smallBtn} onPress={() => onEdit(t)} disabled={loading}>
                     <Text style={styles.smallBtnText}>Editar</Text>
                   </Pressable>
-                  <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(t)}>
+                  <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(t)} disabled={loading}>
                     <Text style={styles.smallBtnText}>Eliminar</Text>
                   </Pressable>
                 </View>

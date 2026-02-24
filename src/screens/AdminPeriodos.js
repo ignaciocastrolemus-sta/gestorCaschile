@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
-import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api/httpClient";
 
 // Admin Periodos: CRUD de periodos semanales
 export default function AdminPeriodos({ token }) {
@@ -59,11 +59,7 @@ export default function AdminPeriodos({ token }) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/Periodos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = await apiGet("/Periodos", { token });
       setItems(Array.isArray(data) ? data : []);
       setError("");
     } catch (e) {
@@ -89,9 +85,18 @@ export default function AdminPeriodos({ token }) {
   };
 
   const onSave = async () => {
+    if (loading) return;
     if (!form.nombre.trim()) return setError("Nombre es obligatorio.");
     if (!form.fechaInicio || !form.fechaTermino) return setError("Fechas obligatorias.");
     if (!form.diasLimiteRendicion) return setError("Dias limite obligatorios.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.fechaInicio) || !/^\d{4}-\d{2}-\d{2}$/.test(form.fechaTermino)) {
+      return setError("Formato de fecha invalido. Usa YYYY-MM-DD.");
+    }
+    const fi = new Date(`${form.fechaInicio}T00:00:00`);
+    const ft = new Date(`${form.fechaTermino}T00:00:00`);
+    if (Number.isNaN(fi.getTime()) || Number.isNaN(ft.getTime())) return setError("Fechas invalidas.");
+    if (fi > ft) return setError("Fecha inicio no puede ser mayor que fecha termino.");
+    if (Number(form.diasLimiteRendicion) <= 0) return setError("Dias limite debe ser mayor a 0.");
 
     try {
       setLoading(true);
@@ -102,19 +107,13 @@ export default function AdminPeriodos({ token }) {
         diasLimiteRendicion: Number(form.diasLimiteRendicion),
         activo: form.activo,
       };
-      const url = editing ? `${API_BASE}/Periodos/${editing.id}` : `${API_BASE}/Periodos`;
-      const method = editing ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      if (editing) {
+        await apiPut(`/Periodos/${editing.id}`, payload, { token });
+      } else {
+        await apiPost("/Periodos", payload, { token });
+      }
       resetForm();
-      load();
+      await load();
     } catch (e) {
       setError(e?.message || "Error al guardar.");
     } finally {
@@ -123,14 +122,11 @@ export default function AdminPeriodos({ token }) {
   };
 
   const onActivateCurrentWeek = async () => {
+    if (loading) return;
     try {
       setLoading(true);
       setError("");
-      const res = await fetch(`${API_BASE}/Periodos/activar-semana-actual`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await apiPost("/Periodos/activar-semana-actual", {}, { token });
       await load();
     } catch (e) {
       setError(e?.message || "No se pudo activar la semana actual.");
@@ -140,6 +136,7 @@ export default function AdminPeriodos({ token }) {
   };
 
   const onEdit = (p) => {
+    if (loading) return;
     setEditing(p);
     setForm({
       nombre: p.nombre || "",
@@ -151,7 +148,8 @@ export default function AdminPeriodos({ token }) {
   };
 
   const onDelete = (p) => {
-    const msg = `¿Eliminar ${p.nombre}?`;
+    if (loading) return;
+    const msg = `Â¿Eliminar ${p.nombre}?`;
     const proceed = typeof window !== "undefined" && window.confirm ? window.confirm(msg) : undefined;
     if (proceed === false) return;
     if (proceed === undefined) {
@@ -165,14 +163,11 @@ export default function AdminPeriodos({ token }) {
   };
 
   const doDelete = async (id) => {
+    if (loading) return;
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/Periodos/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      load();
+      await apiDelete(`/Periodos/${id}`, { token });
+      await load();
     } catch (e) {
       setError(e?.message || "No se pudo eliminar.");
     } finally {
@@ -200,7 +195,7 @@ export default function AdminPeriodos({ token }) {
             value: globalSummary.inactivas,
             valueColor: "#C2410C",
           },
-          { key: "anios", label: "Años cargados", value: globalSummary.anios },
+          { key: "anios", label: "AÃ±os cargados", value: globalSummary.anios },
         ]}
       />
 
@@ -270,14 +265,14 @@ export default function AdminPeriodos({ token }) {
         </View>
 
         <View style={styles.btnRow}>
-          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave}>
+          <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>{loading ? "Guardando..." : "Guardar"}</Text>
           </Pressable>
-          <Pressable style={styles.secondaryBtn} onPress={onActivateCurrentWeek}>
+          <Pressable style={styles.secondaryBtn} onPress={onActivateCurrentWeek} disabled={loading}>
             <Text style={styles.secondaryText}>Activar semana actual</Text>
           </Pressable>
           {editing && (
-            <Pressable style={styles.secondaryBtn} onPress={resetForm}>
+            <Pressable style={styles.secondaryBtn} onPress={resetForm} disabled={loading}>
               <Text style={styles.secondaryText}>Cancelar</Text>
             </Pressable>
           )}
@@ -350,10 +345,10 @@ export default function AdminPeriodos({ token }) {
                   </View>
                   <Text style={styles.weekMeta}>Dias limite: {p.diasLimiteRendicion}</Text>
                   <View style={styles.actions}>
-                    <Pressable style={styles.smallBtn} onPress={() => onEdit(p)}>
+                    <Pressable style={styles.smallBtn} onPress={() => onEdit(p)} disabled={loading}>
                       <Text style={styles.smallBtnText}>Editar</Text>
                     </Pressable>
-                    <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(p)}>
+                    <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(p)} disabled={loading}>
                       <Text style={styles.smallBtnText}>Eliminar</Text>
                     </Pressable>
                   </View>
@@ -492,3 +487,5 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
+
+
