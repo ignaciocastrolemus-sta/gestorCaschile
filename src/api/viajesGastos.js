@@ -81,3 +81,59 @@ export async function eliminarViaje(id) {
   if (!res.ok) throw new Error("Error al eliminar");
   return true;
 }
+
+
+export async function obtenerViajesPorTransferir(token) {
+  try {
+    const res = await fetch(`${API_BASE}/AsignacionViajes/pendientes-transferencia`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("[API GET pendientes-transferencia] Falló con status:", res.status, errorText);
+      throw new Error("Error al cargar los viajes pendientes de transferencia.");
+    }
+    
+    return await res.json();
+  } catch (error) {
+    console.error("[API] Excepción de red en obtenerViajesPorTransferir:", error);
+    throw error;
+  }
+}
+
+export async function transferirFondosViaje(idAsignacionViaje, token) {
+  try {
+    const res = await fetch(`${API_BASE}/AsignacionViajes/${idAsignacionViaje}/transferir`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      // Intentamos parsear el JSON de error que manda tu backend en el BadRequest
+      let errorMsg = "Error al aprobar la transferencia de fondos.";
+      try {
+        const errorData = await res.json();
+        errorMsg = errorData.error || errorMsg;
+      } catch (parseError) {
+        const textData = await res.text();
+        console.error("[API PUT transferir] Respuesta no JSON:", textData);
+      }
+      
+      console.error(`[API PUT transferir] Falló para ID ${idAsignacionViaje} con status:`, res.status, errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    return await res.json();
+  } catch (error) {
+    console.error("[API] Excepción de red en transferirFondosViaje:", error);
+    throw error;
+  }
+}

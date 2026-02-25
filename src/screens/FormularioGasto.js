@@ -142,6 +142,32 @@ const CalendarioGrid = ({ onSelectDate, semanaActiva }) => {
   );
 };
 
+const obtenerEtiquetaSemana = (fechaInicioStr, fechaTerminoStr) => {
+  if (!fechaInicioStr || !fechaTerminoStr) return "";
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  // Función interna para parsear la fecha venga como venga
+  const parsear = (str) => {
+    if (str.includes("/")) {
+      const [d, m, y] = str.split("/").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    // Si viene como YYYY-MM-DD
+    const [y, m, d] = str.split("T")[0].split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const inicio = parsear(fechaInicioStr);
+  const termino = parsear(fechaTerminoStr);
+  termino.setHours(23, 59, 59, 999);
+
+  if (hoy > termino) return ' (Pasada)';
+  if (hoy >= inicio && hoy <= termino) return ' (Actual)';
+  return ' (Futura)';
+};
+
 export default function FormularioGasto({
   form,
   token,
@@ -182,7 +208,15 @@ export default function FormularioGasto({
 
         // Guardamos TODAS las semanas que estén abiertas en el Pool
         const abiertas = Array.isArray(semRes) 
-          ? semRes.filter(s => s.esAbierta === true || s.EsAbierta === true) 
+          ? semRes.filter(s => s.esAbierta === true || s.EsAbierta === true).map(s => {
+              // Calculamos la etiqueta
+              const etiqueta = obtenerEtiquetaSemana(s.fechaInicio || s.FechaInicio, s.fechaTermino || s.FechaTermino);
+              // Retornamos la semana modificando solo su nombre para que incluya la etiqueta
+              return {
+                ...s,
+                nombre: `${s.nombre || s.Nombre}${etiqueta}` 
+              };
+            })
           : [];
         
         setSemanasAbiertas(abiertas);
@@ -260,6 +294,37 @@ export default function FormularioGasto({
       }
     }
   }, [form.fechaInicio, form.fechaTermino]);
+
+  const handleGuardarViaje = () => {
+    // 1. Verificamos que estén las fechas
+    if (!form.fechaInicio || !form.fechaTermino) {
+      alert("Faltan las fechas del viaje. Por favor, selecciónelas en el calendario.");
+      return;
+    }
+
+    // 2. Parseamos las fechas del formulario (formato DD/MM/YYYY)
+    const inicioViaje = parseFecha(form.fechaInicio);
+    const terminoViaje = parseFecha(form.fechaTermino);
+
+    // 3. Parseamos las fechas de la semana activa (Vienen de la API como YYYY-MM-DD)
+    const inicioSemanaStr = semanaActiva.fechaInicio || semanaActiva.FechaInicio;
+    const terminoSemanaStr = semanaActiva.fechaTermino || semanaActiva.FechaTermino;
+    
+    const [yI, mI, dI] = inicioSemanaStr.split("T")[0].split("-").map(Number);
+    const inicioSemana = new Date(yI, mI - 1, dI, 0, 0, 0);
+
+    const [yT, mT, dT] = terminoSemanaStr.split("T")[0].split("-").map(Number);
+    const terminoSemana = new Date(yT, mT - 1, dT, 23, 59, 59);
+
+    // 4. La validación de fuego
+    if (inicioViaje < inicioSemana || terminoViaje > terminoSemana) {
+      alert("¡Error! Las fechas ingresadas no corresponden a la semana seleccionada. Modifique las fechas o seleccione otra semana.");
+      return; // Abortamos la misión
+    }
+
+    // Si todo está correcto, llamamos a la función onSave original
+    if (onSave) onSave();
+  };
 
   // --- 5. TOTALES ---
   const subtotalTarifas = Number(form.desayuno || 0) + Number(form.almuerzo || 0) + Number(form.once || 0) + Number(form.cena || 0) + Number(form.viatico || 0);
@@ -475,7 +540,7 @@ export default function FormularioGasto({
           </View>
             <Pressable 
               style={[dash.saveBtn, !semanaActiva && { backgroundColor: '#ccc' }]} 
-              onPress={onSave} 
+              onPress={handleGuardarViaje} 
               disabled={!semanaActiva}
             >
               <Text style={dash.saveText}>{semanaActiva ? "Guardar Viaje" : "Cerrado"}</Text>

@@ -5,10 +5,12 @@ import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
 import ContadoraRendiciones from "./ContadoraRendiciones";
+import TransferenciasContadora from "./TransferenciasContadora"; // <-- IMPORTAMOS LA NUEVA VISTA
 
-// Contadora: revisión de rendiciones
+// Contadora: revisión de rendiciones y liberación de fondos
 export default function ContadoraHome({ onLogout, token, embedded = false }) {
-  const [activeMenu, setActiveMenu] = useState("rendiciones");
+  // Ponemos 'transferencias' como menú activo por defecto o lo dejas en 'rendiciones'
+  const [activeMenu, setActiveMenu] = useState("transferencias"); 
 
   if (embedded) {
     return (
@@ -17,6 +19,14 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
       </View>
     );
   }
+
+  // Función para renderizar el contenido según el menú
+  const renderContent = () => {
+    if (activeMenu === "transferencias") {
+      return <TransferenciasContadora token={token} />;
+    }
+    return <ContadoraRendiciones token={token} viewMode={activeMenu === "saldos" ? "saldos" : "rendiciones"} />;
+  };
 
   return (
     <View style={dash.root}>
@@ -38,11 +48,19 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
             <View style={dash.avatar} />
             <View>
               <Text style={dash.profileName}>Contadora</Text>
-              <Text style={dash.profileRole}>Revision</Text>
+              <Text style={dash.profileRole}>Revision y Caja</Text>
             </View>
           </View>
 
           <Text style={dash.menuTitle}>OPCIONES</Text>
+          
+          {/* NUEVO ITEM EN EL MENÚ */}
+          <MenuItem
+            label="Liberar Fondos"
+            active={activeMenu === "transferencias"}
+            onPress={() => setActiveMenu("transferencias")}
+          />
+
           <MenuItem
             label="Rendiciones"
             active={activeMenu === "rendiciones"}
@@ -56,7 +74,7 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
         </View>
 
         <View style={dash.content}>
-          <ContadoraRendiciones token={token} viewMode={activeMenu === "saldos" ? "saldos" : "rendiciones"} />
+          {renderContent()}
         </View>
       </View>
     </View>
