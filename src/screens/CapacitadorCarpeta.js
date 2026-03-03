@@ -6,6 +6,7 @@ import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import StatusMessage from "../components/StatusMessage";
 
 // Capacitador: carpeta de viajes + filtros + estado de rendicion
 
@@ -412,9 +413,9 @@ export default function CapacitadorCarpeta({ token, onIrRendicion }) {
         ) : null}
 
         {error ? (
-          <Text style={styles.errorText}>{error}</Text>
+          <StatusMessage tone="error" text={error} style={styles.messageTight} />
         ) : filteredViajes.length === 0 ? (
-          <Text style={styles.errorText}>No hay viajes para mostrar.</Text>
+          <StatusMessage tone="info" text="No hay viajes para mostrar." style={styles.messageTight} />
         ) : (
           <View style={styles.cardList}>
             {filteredViajes.map((row) => (
@@ -488,7 +489,7 @@ export default function CapacitadorCarpeta({ token, onIrRendicion }) {
         </View>
 
         {!selected ? (
-          <Text style={styles.errorText}>No hay viajes para mostrar.</Text>
+          <StatusMessage tone="info" text="No hay viajes para mostrar." style={styles.messageTight} />
         ) : (
           <View style={styles.detailGrid}>
             <View style={styles.detailCard}>
@@ -1090,6 +1091,6 @@ const styles = StyleSheet.create({
   saldoFavorBox: { backgroundColor: "#FFF4E5", borderColor: "#FFD39A" },
   saldoDeudaBox: { backgroundColor: "#FFEFEF", borderColor: "#F3B6B6" },
   saldoCerradoBox: { backgroundColor: "#E7F8ED", borderColor: "#BFE8CB" },
-  errorText: { color: COLORS.muted, fontWeight: "700", marginBottom: 8 },
+  messageTight: { marginBottom: 8 },
 });
 

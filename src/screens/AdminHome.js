@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -36,7 +36,7 @@ export default function AdminHome({ token, onLogout, email = "" }) {
             <Text style={dash.topBtnText}>Inicio</Text>
           </Pressable>
           <Pressable style={dash.topBtn}>
-            <Text style={dash.topBtnText}>Administracion</Text>
+            <Text style={dash.topBtnText}>Administración</Text>
           </Pressable>
           <Pressable style={[dash.topBtn, { backgroundColor: COLORS.orange }]} onPress={onLogout}>
             <Text style={[dash.topBtnText, { color: "#fff" }]}>Salir</Text>
@@ -61,8 +61,9 @@ export default function AdminHome({ token, onLogout, email = "" }) {
             active={activeMenu === "usuarios"}
             onPress={() => setActiveMenu("usuarios")}
           />
+          <Text style={styles.sectionTitle}>Gestión</Text>
           <MenuItem
-            label="Catalogos"
+            label="Catálogos"
             active={activeMenu === "catalogos"}
             onPress={() => setActiveMenu("catalogos")}
           />
@@ -72,16 +73,17 @@ export default function AdminHome({ token, onLogout, email = "" }) {
             onPress={() => setActiveMenu("tarifas")}
           />
           <MenuItem
-            label="Listados"
-            active={activeMenu === "listados"}
-            onPress={() => setActiveMenu("listados")}
-          />
-          <MenuItem
             label="Periodos"
             active={activeMenu === "periodos"}
             onPress={() => setActiveMenu("periodos")}
           />
           <MenuItem label="Roles" active={activeMenu === "roles"} onPress={() => setActiveMenu("roles")} />
+          <Text style={styles.sectionTitle}>Reportes</Text>
+          <MenuItem
+            label="Listados"
+            active={activeMenu === "listados"}
+            onPress={() => setActiveMenu("listados")}
+          />
           <MenuItem
             label="Encuadre"
             active={activeMenu === "encuadre"}
@@ -112,3 +114,14 @@ export default function AdminHome({ token, onLogout, email = "" }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  sectionTitle: {
+    marginTop: 10,
+    marginBottom: 4,
+    fontWeight: "900",
+    color: COLORS.muted,
+    fontSize: 12,
+    textTransform: "uppercase",
+  },
+});

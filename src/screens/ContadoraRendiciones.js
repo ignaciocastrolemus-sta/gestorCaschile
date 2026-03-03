@@ -6,10 +6,12 @@ import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import StatusMessage from "../components/StatusMessage";
 import { isSaldoRendicionValida, normalizeText, resolveSaldoEstado, resolveTipoResultado } from "../utils/saldoUtils";
 import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
 import { obtenerSaldoMovimientos } from "../api/rendiciones";
 import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
 // Contadora: lista de rendiciones y resolucion (aprobar/rechazar)
 export default function ContadoraRendiciones({ token, viewMode = "all" }) {
@@ -24,6 +26,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [msgById, setMsgById] = useState({});
   const [actionMsg, setActionMsg] = useState("");
   const [saldoFiltros, setSaldoFiltros] = useState({ tipo: "Todos", q: "" });
+  const saldoBusquedaDebounced = useDebouncedValue(saldoFiltros.q, 250);
   const [movimientosById, setMovimientosById] = useState({});
   const [movLoadingById, setMovLoadingById] = useState({});
   const [movErrorById, setMovErrorById] = useState({});
@@ -303,7 +306,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const itemsTotalPages = Math.max(1, Math.ceil(itemsTotal / itemsPageSize));
 
   const saldosFiltrados = useMemo(() => {
-    const q = normalizeText(saldoFiltros.q);
+    const q = normalizeText(saldoBusquedaDebounced);
     return (saldos || []).filter((r) => {
       if (!isSaldoRendicionValida(r)) return false;
       const tipo = resolveTipoResultado(r);
@@ -316,7 +319,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       if (q && !searchable.includes(q)) return false;
       return true;
     });
-  }, [saldos, saldoFiltros]);
+  }, [saldos, saldoFiltros.tipo, saldoBusquedaDebounced]);
 
   const saldosPorCapacitador = useMemo(() => {
     const map = new Map();
@@ -501,12 +504,26 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
         ]}
       />
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      {!!actionMsg && <Text style={styles.infoText}>{actionMsg}</Text>}
+      <StatusMessage tone="error" text={error} />
+      <StatusMessage tone="info" text={actionMsg} />
 
       {viewMode !== "rendiciones" ? (
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Reembolsos y devoluciones pendientes</Text>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Pendientes</Text>
+            <Text style={styles.summaryValue}>{resumenSaldosPendientes.count}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>A favor</Text>
+            <Text style={styles.summaryValue}>$ {resumenSaldosPendientes.montoFavor.toLocaleString("es-CL")}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>En contra</Text>
+            <Text style={styles.summaryValue}>$ {resumenSaldosPendientes.montoContra.toLocaleString("es-CL")}</Text>
+          </View>
+        </View>
         <Text style={styles.detailHint}>
           Pendientes: {resumenSaldosPendientes.count} | Monto pendiente: ${" "}
           {resumenSaldosPendientes.monto.toLocaleString("es-CL")}
@@ -1175,9 +1192,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   rejectText: { color: "#fff", fontWeight: "900" },
-  errorText: { color: COLORS.muted, fontWeight: "700", marginBottom: 8 },
-  infoText: { color: COLORS.muted, fontWeight: "700", marginBottom: 8 },
   emptyText: { color: COLORS.muted, fontWeight: "700" },
+  summaryRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8, marginBottom: 8 },
+  summaryCard: {
+    flex: 1,
+    minWidth: 150,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 10,
+    backgroundColor: "#F8FAFF",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  summaryLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 12, marginBottom: 3 },
+  summaryValue: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
   pageRow: {
     marginBottom: 12,
     flexDirection: "row",

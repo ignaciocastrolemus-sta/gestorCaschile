@@ -7,6 +7,7 @@ import { COLORS } from "../constants/colors";
 import { Card } from "../components/UI";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import StatusMessage from "../components/StatusMessage";
 
 const API_URL = `${API_BASE}/Rendiciones/encuadre`;
 
@@ -401,7 +402,7 @@ export default function EncuadreRendiciones({ token }) {
       </Card>
 
       {itemsFiltrados.length === 0 ? (
-        <Text style={{ color: COLORS.muted, fontWeight: "700" }}>No hay rendiciones.</Text>
+        <StatusMessage tone="info" text="No hay rendiciones." style={{ marginBottom: 0 }} />
       ) : (
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <View style={styles.tableHeader}>
@@ -467,7 +468,7 @@ export default function EncuadreRendiciones({ token }) {
         </Card>
       )}
 
-      {!!error && <Text style={styles.error}>{error}</Text>}
+      <StatusMessage tone="error" text={error} style={{ marginTop: 10, marginBottom: 0 }} />
 
       <Modal visible={!!selectedItem} transparent animationType="fade" onRequestClose={closeItemModal}>
         <View style={styles.modalOverlay}>
@@ -674,7 +675,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 11,
   },
-  error: { marginTop: 10, color: COLORS.muted, fontWeight: "800" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",

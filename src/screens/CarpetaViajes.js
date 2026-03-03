@@ -5,10 +5,12 @@ import { Picker } from "@react-native-picker/picker";
 import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import StatusMessage from "../components/StatusMessage";
 import { isSaldoRendicionValida, normalizeText, resolveSaldoEstado, resolveTipoResultado } from "../utils/saldoUtils";
 import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
 import { obtenerSaldoMovimientos } from "../api/rendiciones";
 import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
 // Secretaria: rendiciones recibidas y envio a contadora.
 export default function CarpetaViajes({ token, viewMode = "all" }) {
@@ -22,6 +24,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [saldoFiltros, setSaldoFiltros] = useState({ tipo: "Todos", q: "" });
+  const saldoBusquedaDebounced = useDebouncedValue(saldoFiltros.q, 250);
   const [movimientosById, setMovimientosById] = useState({});
   const [movLoadingById, setMovLoadingById] = useState({});
   const [movErrorById, setMovErrorById] = useState({});
@@ -263,7 +266,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const itemsTotalPages = Math.max(1, Math.ceil(itemsTotal / itemsPageSize));
 
   const saldosFiltrados = useMemo(() => {
-    const q = normalizeText(saldoFiltros.q);
+    const q = normalizeText(saldoBusquedaDebounced);
     return (saldos || []).filter((r) => {
       if (!isSaldoRendicionValida(r)) return false;
       const tipo = resolveTipoResultado(r);
@@ -276,7 +279,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       if (q && !searchable.includes(q)) return false;
       return true;
     });
-  }, [saldos, saldoFiltros]);
+  }, [saldos, saldoFiltros.tipo, saldoBusquedaDebounced]);
 
   const saldosPorCapacitador = useMemo(() => {
     const map = new Map();
@@ -450,8 +453,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       {viewMode !== "saldos" ? (
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Pendientes de revision</Text>
-        {!!error && <Text style={{ color: "#6B7280", fontWeight: "700" }}>{error}</Text>}
-        {!!info && <Text style={{ color: "#6B7280", fontWeight: "700" }}>{info}</Text>}
+        <StatusMessage tone="error" text={error} />
+        <StatusMessage tone="info" text={info} />
 
         {pendientesAgrupados.length === 0 ? (
           <Text style={{ color: "#6B7280", fontWeight: "700", marginTop: 8 }}>
@@ -558,6 +561,20 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       {viewMode !== "rendiciones" ? (
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Reembolsos y devoluciones pendientes</Text>
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8, marginBottom: 8 }}>
+          <View style={summaryCardStyle}>
+            <Text style={summaryLabelStyle}>Pendientes</Text>
+            <Text style={summaryValueStyle}>{resumenSaldosPendientes.count}</Text>
+          </View>
+          <View style={summaryCardStyle}>
+            <Text style={summaryLabelStyle}>A favor</Text>
+            <Text style={summaryValueStyle}>$ {resumenSaldosPendientes.montoFavor.toLocaleString("es-CL")}</Text>
+          </View>
+          <View style={summaryCardStyle}>
+            <Text style={summaryLabelStyle}>En contra</Text>
+            <Text style={summaryValueStyle}>$ {resumenSaldosPendientes.montoContra.toLocaleString("es-CL")}</Text>
+          </View>
+        </View>
         <Text style={dash.docSub}>
           Pendientes: {resumenSaldosPendientes.count} | Monto pendiente: ${" "}
           {resumenSaldosPendientes.monto.toLocaleString("es-CL")}
@@ -957,6 +974,30 @@ function resolveMonthLabel(key) {
   if (Number.isNaN(d.getTime())) return key;
   return d.toLocaleDateString("es-CL", { month: "long", year: "numeric" });
 }
+
+const summaryCardStyle = {
+  flex: 1,
+  minWidth: 150,
+  borderWidth: 1,
+  borderColor: "#D9E5FF",
+  borderRadius: 10,
+  backgroundColor: "#F8FAFF",
+  paddingVertical: 8,
+  paddingHorizontal: 10,
+};
+
+const summaryLabelStyle = {
+  color: "#6B7280",
+  fontWeight: "800",
+  fontSize: 12,
+  marginBottom: 3,
+};
+
+const summaryValueStyle = {
+  color: "#111827",
+  fontWeight: "900",
+  fontSize: 16,
+};
 
 
 

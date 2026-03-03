@@ -181,7 +181,11 @@ export default function AdminRoles({ token, title }) {
             </Pressable>
           )}
         </View>
-        {!!error && <Text style={styles.error}>{error}</Text>}
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.error}>{error}</Text>
+          </View>
+        )}
       </View>
 
       <View style={dash.panel}>
@@ -273,7 +277,16 @@ const styles = StyleSheet.create({
     borderColor: "#D9E5FF",
   },
   secondaryText: { color: COLORS.blue2, fontWeight: "900" },
-  error: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
+  errorBox: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#F6C7CC",
+    backgroundColor: "#FFF1F2",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  error: { color: "#B42318", fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "800" },
   listHeader: { marginBottom: 6 },
   listHint: { color: COLORS.muted, fontWeight: "700", marginTop: 4 },

@@ -5,13 +5,19 @@ import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from 
 import { bajaSeguraUsuario, buildAnonUserView } from "../api/usuarios";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
-import { Picker } from "@react-native-picker/picker";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
 // Admin Usuarios: crear/editar/desactivar usuarios y asignar rol
 
 export default function AdminUsuarios({ token, title }) {
+  const ROLE_UI = {
+    Administrador: { hint: "Acceso total", color: "#1E5AC8" },
+    Secretaria: { hint: "Gestiona asignaciones", color: "#E2871B" },
+    Contadora: { hint: "Aprueba rendiciones", color: "#198754" },
+    "Usuario Terreno": { hint: "Ingresa gastos", color: "#5F6B7A" },
+  };
   const BANCOS_CHILE = [
     "Banco de Chile",
     "BancoEstado",
@@ -52,6 +58,9 @@ export default function AdminUsuarios({ token, title }) {
   const [loading, setLoading] = useState(false);
   const [filtroListado, setFiltroListado] = useState("activos");
   const [busqueda, setBusqueda] = useState("");
+  const [bancoQuery, setBancoQuery] = useState("");
+  const [showBancoOptions, setShowBancoOptions] = useState(false);
+  const busquedaDebounced = useDebouncedValue(busqueda, 250);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
   const [form, setForm] = useState({
@@ -68,12 +77,21 @@ export default function AdminUsuarios({ token, title }) {
   });
 
   const roleItems = useMemo(() => roles.map((r) => ({ label: r.nombre, value: r.id })), [roles]);
+  const bancosFiltrados = useMemo(() => {
+    const q = bancoQuery.trim().toLowerCase();
+    if (!q) return BANCOS_CHILE;
+    return BANCOS_CHILE.filter((b) => b.toLowerCase().includes(q));
+  }, [bancoQuery]);
+  const selectedRole = useMemo(
+    () => roleItems.find((it) => Number(it.value) === Number(form.rolId || roleItems[0]?.value))?.label || "",
+    [roleItems, form.rolId]
+  );
   const usuariosFiltrados = useMemo(() => {
     let base = usuarios;
     if (filtroListado === "activos") base = base.filter((u) => Boolean(u.activo));
     if (filtroListado === "inactivos") base = base.filter((u) => !u.activo);
 
-    const q = busqueda.trim().toLowerCase();
+    const q = busquedaDebounced.trim().toLowerCase();
     if (!q) return base;
 
     // Busqueda rapida por campos clave del usuario.
@@ -92,7 +110,7 @@ export default function AdminUsuarios({ token, title }) {
         .toLowerCase();
       return texto.includes(q);
     });
-  }, [usuarios, filtroListado, busqueda]);
+  }, [usuarios, filtroListado, busquedaDebounced]);
   const totalPages = Math.max(1, Math.ceil(usuariosFiltrados.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
   const totalUsuarios = usuarios.length;
@@ -121,11 +139,15 @@ export default function AdminUsuarios({ token, title }) {
 
   useEffect(() => {
     setPage(1);
-  }, [filtroListado, busqueda]);
+  }, [filtroListado, busquedaDebounced]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  useEffect(() => {
+    setBancoQuery(form.banco || "");
+  }, [form.banco]);
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -369,36 +391,48 @@ export default function AdminUsuarios({ token, title }) {
               </View>
               <View style={styles.col}>
                 <Text style={dash.label}>Rol</Text>
-                <View style={styles.selectWrap}>
-                  <Picker
-                    selectedValue={form.rolId || roleItems[0]?.value}
-                    onValueChange={(v) => setField("rolId", v)}
-                    style={styles.picker}
-                  >
-                    {roleItems.map((it) => (
-                      <Picker.Item key={String(it.value)} label={it.label} value={it.value} />
-                    ))}
-                  </Picker>
+                <View style={styles.roleChipsWrap}>
+                  {roleItems.map((it) => {
+                    const active = Number(form.rolId || roleItems[0]?.value) === Number(it.value);
+                    const accent = ROLE_UI[it.label]?.color || COLORS.blue2;
+                    return (
+                      <Pressable
+                        key={String(it.value)}
+                        style={[
+                          styles.roleChip,
+                          { borderColor: `${accent}55`, backgroundColor: active ? `${accent}22` : "#fff" },
+                        ]}
+                        onPress={() => setField("rolId", it.value)}
+                      >
+                        <Text style={[styles.roleChipTitle, { color: active ? accent : COLORS.text }]}>{it.label}</Text>
+                        <Text style={styles.roleChipHint}>{ROLE_UI[it.label]?.hint || "Perfil operativo"}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
+                {!!selectedRole && (
+                  <View style={[styles.roleHint, { borderColor: `${ROLE_UI[selectedRole]?.color || COLORS.blue2}66` }]}>
+                    <Text style={[styles.roleHintText, { color: ROLE_UI[selectedRole]?.color || COLORS.blue2 }]}>
+                      {ROLE_UI[selectedRole]?.hint || "Perfil operativo"}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
 
             <View style={styles.grid}>
               <View style={styles.col}>
                 <Text style={dash.label}>Activo</Text>
-                <View style={styles.toggleRow}>
+                <View style={styles.switchRow}>
                   <Pressable
-                    style={[styles.toggleBtn, form.activo && styles.toggleBtnActive]}
-                    onPress={() => setField("activo", true)}
+                    style={[styles.switchTrack, form.activo && styles.switchTrackActive]}
+                    onPress={() => setField("activo", !form.activo)}
                   >
-                    <Text style={[styles.toggleText, form.activo && styles.toggleTextActive]}>Si</Text>
+                    <View style={[styles.switchThumb, form.activo && styles.switchThumbActive]} />
                   </Pressable>
-                  <Pressable
-                    style={[styles.toggleBtn, !form.activo && styles.toggleBtnActive]}
-                    onPress={() => setField("activo", false)}
-                  >
-                    <Text style={[styles.toggleText, !form.activo && styles.toggleTextActive]}>No</Text>
-                  </Pressable>
+                  <Text style={[styles.switchText, form.activo && styles.switchTextActive]}>
+                    {form.activo ? "Si" : "No"}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -421,35 +455,71 @@ export default function AdminUsuarios({ token, title }) {
               </View>
               <View style={styles.col}>
                 <Text style={dash.label}>Banco</Text>
-                <View style={styles.selectWrap}>
-                  <Picker
-                    selectedValue={form.banco || ""}
-                    onValueChange={(v) => setField("banco", v)}
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="Selecciona banco" value="" />
-                    {BANCOS_CHILE.map((b) => (
-                      <Picker.Item key={b} label={b} value={b} />
-                    ))}
-                  </Picker>
+                <View style={styles.bankCombobox}>
+                  <TextInput
+                    value={bancoQuery}
+                    onChangeText={(v) => {
+                      setBancoQuery(v);
+                      setShowBancoOptions(true);
+                      setField("banco", "");
+                    }}
+                    onFocus={() => setShowBancoOptions(true)}
+                    onBlur={() => {
+                      const exacto = BANCOS_CHILE.find((b) => b.toLowerCase() === bancoQuery.trim().toLowerCase());
+                      if (exacto) {
+                        setField("banco", exacto);
+                        setBancoQuery(exacto);
+                      }
+                      // Da tiempo al click en una opcion antes de cerrar.
+                      setTimeout(() => setShowBancoOptions(false), 220);
+                    }}
+                    placeholder="Buscar banco..."
+                    placeholderTextColor={COLORS.muted}
+                    style={styles.bankInput}
+                  />
+                  {showBancoOptions && (
+                    <View style={styles.bankList}>
+                      <ScrollView nestedScrollEnabled style={styles.bankListScroll}>
+                        {bancosFiltrados.map((b) => (
+                          <Pressable
+                            key={b}
+                            style={styles.bankItem}
+                            onPressIn={() => {
+                              setField("banco", b);
+                              setBancoQuery(b);
+                            }}
+                            onPress={() => {
+                              setShowBancoOptions(false);
+                            }}
+                          >
+                            <Text style={styles.bankItemText}>{b}</Text>
+                          </Pressable>
+                        ))}
+                        {bancosFiltrados.length === 0 ? <Text style={styles.bankEmpty}>Sin resultados</Text> : null}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
+                <Text style={styles.bankSelected}>{form.banco ? `Seleccionado: ${form.banco}` : "Selecciona un banco"}</Text>
               </View>
             </View>
 
             <View style={styles.grid}>
               <View style={styles.col}>
                 <Text style={dash.label}>Tipo de cuenta</Text>
-                <View style={styles.selectWrap}>
-                  <Picker
-                    selectedValue={form.cuentaTipo || ""}
-                    onValueChange={(v) => setField("cuentaTipo", v)}
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="Selecciona tipo" value="" />
-                    {TIPOS_CUENTA.map((t) => (
-                      <Picker.Item key={t} label={t} value={t} />
-                    ))}
-                  </Picker>
+                <View style={styles.typeChips}>
+                  {TIPOS_CUENTA.map((tipo) => {
+                    const active = form.cuentaTipo === tipo;
+                    return (
+                      <Pressable
+                        key={tipo}
+                        style={[styles.typeChip, active && styles.typeChipActive]}
+                        onPress={() => setField("cuentaTipo", tipo)}
+                      >
+                        <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{tipo}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
               <View style={styles.col}>
@@ -491,8 +561,16 @@ export default function AdminUsuarios({ token, title }) {
             </Pressable>
           )}
         </View>
-        {!!error && <Text style={styles.error}>{error}</Text>}
-        {!!info && <Text style={styles.info}>{info}</Text>}
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.error}>{error}</Text>
+          </View>
+        )}
+        {!!info && (
+          <View style={styles.infoBox}>
+            <Text style={styles.info}>{info}</Text>
+          </View>
+        )}
       </View>
 
       <View style={dash.panel}>
@@ -542,13 +620,25 @@ export default function AdminUsuarios({ token, title }) {
         ) : (
           <View style={styles.gridList}>
             {pagedUsuarios.map((u) => (
-                <View key={u.id} style={styles.card}>
+              <View key={u.id} style={styles.card}>
                 <View style={styles.cardLeft}>
-                  <Text style={styles.cardTitle}>{u.nombre}</Text>
-                  <Text style={styles.cardSub}>{u.email}</Text>
+                  <View style={styles.nameRow}>
+                    <View style={styles.avatarMini}>
+                      <Text style={styles.avatarMiniText}>{String(u.nombre || "?").trim().charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTitle}>{u.nombre}</Text>
+                      <Text style={styles.cardSub}>{u.email}</Text>
+                    </View>
+                  </View>
                   {isUsuarioAnonimizado(u) ? <Text style={styles.anonTag}>Cuenta anonimizada</Text> : null}
                   <View style={styles.metaRow}>
-                    <View style={styles.badge}>
+                    <View
+                      style={[
+                        styles.badge,
+                        { backgroundColor: `${ROLE_UI[u.rolNombre]?.color || COLORS.blue2}15`, borderColor: `${ROLE_UI[u.rolNombre]?.color || COLORS.blue2}55` },
+                      ]}
+                    >
                       <Text style={styles.badgeText}>{u.rolNombre || "Sin rol"}</Text>
                     </View>
                     <View style={[styles.badge, u.activo ? styles.badgeActive : styles.badgeInactive]}>
@@ -615,30 +705,79 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DDE8FF",
   },
-  selectWrap: {
-    height: 44,
+  roleChipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  roleChip: {
+    minWidth: 150,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  roleChipTitle: { fontWeight: "900", fontSize: 13 },
+  roleChipHint: { marginTop: 3, color: COLORS.muted, fontWeight: "700", fontSize: 12 },
+  roleHint: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "#F8FBFF",
+  },
+  roleHintText: { fontWeight: "800", fontSize: 12 },
+  bankCombobox: {
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
     borderRadius: 12,
+    backgroundColor: "#fff",
     overflow: "hidden",
-    backgroundColor: "#fff",
-    justifyContent: "center",
   },
-  picker: { height: 44, color: COLORS.text },
-  toggleRow: { flexDirection: "row", gap: 8 },
-  toggleBtn: {
-    flex: 1,
-    height: 42,
-    borderRadius: 10,
+  bankInput: { ...dash.input, borderWidth: 0, borderRadius: 0, marginBottom: 0, height: 44 },
+  bankList: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayBorder,
+    backgroundColor: "#fff",
+    maxHeight: 220,
+  },
+  bankListScroll: { maxHeight: 220 },
+  bankItem: { paddingVertical: 10, paddingHorizontal: 12 },
+  bankItemText: { color: COLORS.text, fontWeight: "700" },
+  bankEmpty: { paddingVertical: 10, paddingHorizontal: 12, color: COLORS.muted, fontWeight: "700" },
+  bankSelected: { marginTop: 6, color: COLORS.muted, fontWeight: "700", fontSize: 12 },
+  typeChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  typeChip: {
     borderWidth: 1,
-    borderColor: COLORS.grayBorder,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
+    borderColor: "#D9E5FF",
+    backgroundColor: "#F7FAFF",
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
   },
-  toggleBtnActive: { backgroundColor: "#E8F0FF", borderColor: "#BFD4FF" },
-  toggleText: { fontWeight: "900", color: COLORS.text },
-  toggleTextActive: { color: COLORS.blue2 },
+  typeChipActive: { borderColor: "#AFC8FF", backgroundColor: "#E8F0FF" },
+  typeChipText: { color: COLORS.text, fontWeight: "800", fontSize: 12 },
+  typeChipTextActive: { color: COLORS.blue2 },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
+  switchTrack: {
+    width: 54,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: "#E5E7EB",
+    borderWidth: 1,
+    borderColor: "#CFD5E0",
+    padding: 2,
+    justifyContent: "center",
+  },
+  switchTrackActive: { backgroundColor: "#D9F2E4", borderColor: "#9AD5B7" },
+  switchThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#CFD5E0",
+  },
+  switchThumbActive: { transform: [{ translateX: 22 }], borderColor: "#8BC9AB" },
+  switchText: { fontWeight: "800", color: COLORS.muted },
+  switchTextActive: { color: "#0D8A42" },
   btnRow: { flexDirection: "row", gap: 10, marginTop: 6 },
   primaryBtn: {
     paddingVertical: 10,
@@ -656,8 +795,26 @@ const styles = StyleSheet.create({
     borderColor: "#D9E5FF",
   },
   secondaryText: { color: COLORS.blue2, fontWeight: "900" },
-  error: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
-  info: { marginTop: 8, color: "#0D8A42", fontWeight: "800" },
+  errorBox: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#F6C7CC",
+    backgroundColor: "#FFF1F2",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  infoBox: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#B9E6C9",
+    backgroundColor: "#ECFDF3",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  error: { color: "#B42318", fontWeight: "800" },
+  info: { color: "#0D8A42", fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "800" },
   listHeader: { marginBottom: 6 },
   listHint: { color: COLORS.muted, fontWeight: "700", marginTop: 4 },
@@ -686,6 +843,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.grayBorder,
   },
   cardLeft: { flex: 1, paddingRight: 10 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 },
+  avatarMini: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: "#E9F0FF",
+    borderWidth: 1,
+    borderColor: "#C8D8FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarMiniText: { fontWeight: "900", color: COLORS.blue2 },
   cardTitle: { fontWeight: "900", color: COLORS.text, fontSize: 15 },
   cardSub: { marginTop: 2, color: COLORS.muted, fontWeight: "700" },
   anonTag: { marginTop: 6, color: "#C2410C", fontWeight: "900", fontSize: 12 },

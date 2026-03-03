@@ -24,6 +24,7 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
   const [archivos, setArchivos] = useState({});
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [filters, setFilters] = useState({ semana: "", estado: "Todos", destino: "" });
   const [mostrarTodos, setMostrarTodos] = useState(false);
   const [rendiciones, setRendiciones] = useState([]);
@@ -311,6 +312,7 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
   };
 
   const enviarRendicion = async () => {
+    if (isSending) return;
     setMensaje("");
     const err = validateBeforeSend();
     if (err) {
@@ -336,6 +338,7 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
     });
 
     try {
+      setIsSending(true);
       const res = await fetch(`${API_BASE}/Rendiciones`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -358,6 +361,8 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
       }
     } catch (e) {
       setMensaje(e?.message || "Error al enviar rendicion.");
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -601,8 +606,8 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
           Puedes enviar con diferencia. Si rindes mas, queda reembolso; si rindes menos, queda saldo por
           devolver.
         </Text>
-        <Pressable style={styles.sendBtn} onPress={enviarRendicion}>
-          <Text style={styles.sendBtnText}>Enviar rendicion</Text>
+        <Pressable style={[styles.sendBtn, isSending && styles.sendBtnDisabled]} onPress={enviarRendicion} disabled={isSending}>
+          <Text style={styles.sendBtnText}>{isSending ? "Enviando..." : "Enviar rendicion"}</Text>
         </Pressable>
       </View>
 
@@ -904,6 +909,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#0D2F6B",
   },
+  sendBtnDisabled: { opacity: 0.7 },
   sendBtnText: { fontWeight: "900", color: "#fff" },
   errorText: { color: COLORS.muted, fontWeight: "700" },
   messageText: { color: COLORS.muted, fontWeight: "800", marginBottom: 12 },

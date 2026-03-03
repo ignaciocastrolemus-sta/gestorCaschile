@@ -7,6 +7,7 @@ import { COLORS } from "../constants/colors";
 import { Input } from "../components/UI";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import StatusMessage from "../components/StatusMessage";
 
 // Secretaria: transferencias (resumen por capacitador)
 export default function TransferenciasSecretaria({ token }) {
@@ -260,13 +261,10 @@ export default function TransferenciasSecretaria({ token }) {
         onSecondaryPress={() => loadTransfer(transferEstado, transferPeriodoId)}
       />
 
-      {!!actionMsg && (
-        <View
-          style={[styles.feedbackBox, actionKind === "error" ? styles.feedbackError : styles.feedbackSuccess]}
-        >
-          <Text style={styles.feedbackText}>{actionMsg}</Text>
-        </View>
-      )}
+      <StatusMessage
+        tone={actionKind === "error" ? "error" : actionKind === "success" ? "info" : "warning"}
+        text={actionMsg}
+      />
 
       <KpiRow
         items={[
@@ -461,21 +459,5 @@ const styles = StyleSheet.create({
     borderColor: "#D9E5FF",
   },
   transferBtnTextSecondary: { color: COLORS.blue2, fontWeight: "900" },
-  feedbackBox: {
-    marginBottom: 8,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-  },
-  feedbackSuccess: {
-    backgroundColor: "#EDF8F2",
-    borderColor: "#9FD7B7",
-  },
-  feedbackError: {
-    backgroundColor: "#FFF0F0",
-    borderColor: "#F0B3B3",
-  },
-  feedbackText: { color: COLORS.text, fontWeight: "800" },
   emptyText: { color: COLORS.muted, fontWeight: "700" },
 });

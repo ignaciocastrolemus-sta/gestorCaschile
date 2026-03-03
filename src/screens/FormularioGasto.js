@@ -5,6 +5,7 @@ import { COLORS } from "../constants/colors";
 import { Field, Small } from "../components/FormFields";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import { logWarn } from "../utils/logger";
 import {
   obtenerCapacitadores,
   obtenerComunas,
@@ -60,6 +61,7 @@ export default function FormularioGasto({
               .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
           : [];
 
+          
         const comunasMap = {};
         if (Array.isArray(comunasRes)) {
           comunasRes.forEach((c) => {
@@ -91,7 +93,7 @@ export default function FormularioGasto({
         setCapacitadores(capsNombres);
         setJefesProyecto(jefesNombres);
       } catch (err) {
-        console.log("Catalogos: error al cargar", err);
+        logWarn("Catalogos: error al cargar", err);
       }
     })();
     return () => {
@@ -119,7 +121,7 @@ export default function FormularioGasto({
         if (!alive) return;
         setMunicipios(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.log("Municipios: error al cargar", err);
+        logWarn("Municipios: error al cargar", err);
         setMunicipios([]);
       }
     })();

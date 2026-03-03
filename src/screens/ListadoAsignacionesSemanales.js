@@ -1,12 +1,14 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { COLORS } from "../constants/colors";
 import { Card, Col, Label, Row, SectionTitle, Select } from "../components/UI";
 
 // Listados generales (asignaciones, periodos, deudores, devoluciones)
 export default function ListadoAsignacionesSemanales({ token }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 920;
   const [tab, setTab] = useState("asignaciones");
   const [items, setItems] = useState([]);
   const [periodos, setPeriodos] = useState([]);
@@ -25,6 +27,7 @@ export default function ListadoAsignacionesSemanales({ token }) {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
   const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const formatMoney = (value) => `$ ${Number(value || 0).toLocaleString("es-CL")}`;
 
   const toDate = (value) => {
     if (!value) return null;
@@ -220,6 +223,40 @@ export default function ListadoAsignacionesSemanales({ token }) {
     }
   };
 
+  const resumen = useMemo(() => {
+    if (tab === "asignaciones") {
+      return items.reduce(
+        (acc, it) => ({
+          total: acc.total + 1,
+          asignado: acc.asignado + Number(it.totalAsignado || 0),
+          rendido: acc.rendido + Number(it.totalRendido || 0),
+        }),
+        { total: 0, asignado: 0, rendido: 0 }
+      );
+    }
+    if (tab === "deudores") {
+      return deudores.reduce(
+        (acc, it) => ({
+          total: acc.total + Number(it.cantidad || 0),
+          asignado: acc.asignado + Number(it.totalAsignado || 0),
+          rendido: acc.rendido + Number(it.totalRendido || 0),
+        }),
+        { total: 0, asignado: 0, rendido: 0 }
+      );
+    }
+    if (tab === "devoluciones") {
+      return devoluciones.reduce(
+        (acc, it) => ({
+          total: acc.total + Number(it.cantidad || 0),
+          asignado: acc.asignado + Number(it.totalAsignado || 0),
+          rendido: acc.rendido + Number(it.totalRendido || 0),
+        }),
+        { total: 0, asignado: 0, rendido: 0 }
+      );
+    }
+    return { total: filteredPeriodos.length, asignado: 0, rendido: 0 };
+  }, [deudores, devoluciones, filteredPeriodos.length, items, tab]);
+
   return (
     <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
       <SectionTitle title="Listados generales" subtitle="Resumenes del sistema con filtros y exportacion." />
@@ -231,16 +268,10 @@ export default function ListadoAsignacionesSemanales({ token }) {
         >
           <Text style={[styles.tabText, tab === "asignaciones" && styles.tabTextActive]}>Asignaciones</Text>
         </Pressable>
-        <Pressable
-          style={[styles.tab, tab === "periodos" && styles.tabActive]}
-          onPress={() => setTab("periodos")}
-        >
+        <Pressable style={[styles.tab, tab === "periodos" && styles.tabActive]} onPress={() => setTab("periodos")}>
           <Text style={[styles.tabText, tab === "periodos" && styles.tabTextActive]}>Periodos</Text>
         </Pressable>
-        <Pressable
-          style={[styles.tab, tab === "deudores" && styles.tabActive]}
-          onPress={() => setTab("deudores")}
-        >
+        <Pressable style={[styles.tab, tab === "deudores" && styles.tabActive]} onPress={() => setTab("deudores")}>
           <Text style={[styles.tabText, tab === "deudores" && styles.tabTextActive]}>Deudores</Text>
         </Pressable>
         <Pressable
@@ -253,6 +284,9 @@ export default function ListadoAsignacionesSemanales({ token }) {
 
       <Card style={{ marginBottom: 12 }}>
         <Text style={styles.filterTitle}>Filtros rapidos</Text>
+        <Text style={{ marginBottom: 8, color: COLORS.muted, fontWeight: "700" }}>
+          Filtra por mes, ano y responsables para obtener un resumen limpio.
+        </Text>
 
         <View style={styles.monthRow}>
           {MONTHS.map((m, idx) => (
@@ -265,22 +299,14 @@ export default function ListadoAsignacionesSemanales({ token }) {
             </Pressable>
           ))}
           <View style={styles.yearSelect}>
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => setSelectedYear(Number(v))}
-              items={yearItems}
-            />
+            <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))} items={yearItems} />
           </View>
         </View>
 
         <Row gap={12} style={{ marginTop: 12 }}>
           <Col>
             <Label>Periodo</Label>
-            <Select
-              value={periodoId}
-              onValueChange={setPeriodoId}
-              items={[{ label: "Todos", value: "" }, ...periodosItemsByMonth]}
-            />
+            <Select value={periodoId} onValueChange={setPeriodoId} items={[{ label: "Todos", value: "" }, ...periodosItemsByMonth]} />
           </Col>
           <Col>
             <Label>Capacitador</Label>
@@ -296,11 +322,7 @@ export default function ListadoAsignacionesSemanales({ token }) {
           <Row gap={12} style={{ marginTop: 12 }}>
             <Col>
               <Label>Cliente</Label>
-              <Select
-                value={clienteId}
-                onValueChange={setClienteId}
-                items={[{ label: "Todos", value: "" }, ...clientesItems]}
-              />
+              <Select value={clienteId} onValueChange={setClienteId} items={[{ label: "Todos", value: "" }, ...clientesItems]} />
             </Col>
             <Col>
               <Label>Estado</Label>
@@ -362,29 +384,48 @@ export default function ListadoAsignacionesSemanales({ token }) {
         </View>
       </Card>
 
-      {!!error && <Text style={styles.error}>{error}</Text>}
+      {!!error && (
+        <View style={styles.errorBox}>
+          <Text style={styles.error}>{error}</Text>
+        </View>
+      )}
 
       <Card>
+        <View style={[styles.summaryRow, isMobile && styles.summaryRowMobile]}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>
+              {tab === "periodos" ? "Periodos" : tab === "asignaciones" ? "Asignaciones" : "Rendiciones"}
+            </Text>
+            <Text style={styles.summaryValue}>{Number(resumen.total || 0).toLocaleString("es-CL")}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Total asignado</Text>
+            <Text style={styles.summaryValue}>{formatMoney(resumen.asignado)}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Total rendido</Text>
+            <Text style={styles.summaryValue}>{formatMoney(resumen.rendido)}</Text>
+          </View>
+        </View>
+
         {tab === "asignaciones" &&
           (items.length === 0 ? (
             <Text style={styles.empty}>No hay asignaciones.</Text>
           ) : (
             items.map((it) => (
-              <View key={it.id} style={styles.row}>
+              <View key={it.id ?? `${it.capacitador}-${it.periodo}-${it.cliente}`} style={[styles.row, isMobile && styles.rowMobile]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>{it.capacitador}</Text>
                   <Text style={styles.sub}>
                     {it.periodo} - {it.cliente} - {it.region}
                   </Text>
-                  <Text style={styles.sub}>Estado: {it.estado}</Text>
+                  <View style={styles.chipRow}>
+                    <Text style={[styles.statusChip, getStatusStyle(it.estado)]}>{it.estado || "Sin estado"}</Text>
+                  </View>
                 </View>
-                <View style={styles.right}>
-                  <Text style={styles.money}>
-                    Asignado: $ {Number(it.totalAsignado || 0).toLocaleString("es-CL")}
-                  </Text>
-                  <Text style={styles.money}>
-                    Rendido: $ {Number(it.totalRendido || 0).toLocaleString("es-CL")}
-                  </Text>
+                <View style={[styles.right, isMobile && styles.rightMobile]}>
+                  <Text style={styles.money}>Asignado: {formatMoney(it.totalAsignado)}</Text>
+                  <Text style={styles.money}>Rendido: {formatMoney(it.totalRendido)}</Text>
                   <Text style={styles.sub}>Rendiciones: {it.cantidadRendiciones}</Text>
                 </View>
               </View>
@@ -396,14 +437,14 @@ export default function ListadoAsignacionesSemanales({ token }) {
             <Text style={styles.empty}>No hay periodos.</Text>
           ) : (
             filteredPeriodos.map((p) => (
-              <View key={p.id} style={styles.row}>
+              <View key={p.id} style={[styles.row, isMobile && styles.rowMobile]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>{p.nombre}</Text>
                   <Text style={styles.sub}>
                     {String(p.fechaInicio).slice(0, 10)} - {String(p.fechaTermino).slice(0, 10)}
                   </Text>
                 </View>
-                <View style={styles.right}>
+                <View style={[styles.right, isMobile && styles.rightMobile]}>
                   <Text style={styles.sub}>Activo: {p.activo ? "Si" : "No"}</Text>
                 </View>
               </View>
@@ -415,21 +456,15 @@ export default function ListadoAsignacionesSemanales({ token }) {
             <Text style={styles.empty}>No hay deudores.</Text>
           ) : (
             deudores.map((d, idx) => (
-              <View key={`${d.capacitador}-${idx}`} style={styles.row}>
+              <View key={`${d.capacitador}-${idx}`} style={[styles.row, isMobile && styles.rowMobile]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>{d.capacitador}</Text>
                   <Text style={styles.sub}>Rendiciones: {d.cantidad}</Text>
                 </View>
-                <View style={styles.right}>
-                  <Text style={styles.money}>
-                    Asignado: $ {Number(d.totalAsignado || 0).toLocaleString("es-CL")}
-                  </Text>
-                  <Text style={styles.money}>
-                    Rendido: $ {Number(d.totalRendido || 0).toLocaleString("es-CL")}
-                  </Text>
-                  <Text style={styles.sub}>
-                    Diferencia: $ {Number(d.diferencia || 0).toLocaleString("es-CL")}
-                  </Text>
+                <View style={[styles.right, isMobile && styles.rightMobile]}>
+                  <Text style={styles.money}>Asignado: {formatMoney(d.totalAsignado)}</Text>
+                  <Text style={styles.money}>Rendido: {formatMoney(d.totalRendido)}</Text>
+                  <Text style={styles.sub}>Diferencia: {formatMoney(d.diferencia)}</Text>
                 </View>
               </View>
             ))
@@ -440,21 +475,15 @@ export default function ListadoAsignacionesSemanales({ token }) {
             <Text style={styles.empty}>No hay devoluciones.</Text>
           ) : (
             devoluciones.map((d, idx) => (
-              <View key={`${d.capacitador}-${idx}`} style={styles.row}>
+              <View key={`${d.capacitador}-${idx}`} style={[styles.row, isMobile && styles.rowMobile]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>{d.capacitador}</Text>
                   <Text style={styles.sub}>Rendiciones: {d.cantidad}</Text>
                 </View>
-                <View style={styles.right}>
-                  <Text style={styles.money}>
-                    Asignado: $ {Number(d.totalAsignado || 0).toLocaleString("es-CL")}
-                  </Text>
-                  <Text style={styles.money}>
-                    Rendido: $ {Number(d.totalRendido || 0).toLocaleString("es-CL")}
-                  </Text>
-                  <Text style={styles.sub}>
-                    Diferencia: $ {Number(d.diferencia || 0).toLocaleString("es-CL")}
-                  </Text>
+                <View style={[styles.right, isMobile && styles.rightMobile]}>
+                  <Text style={styles.money}>Asignado: {formatMoney(d.totalAsignado)}</Text>
+                  <Text style={styles.money}>Rendido: {formatMoney(d.totalRendido)}</Text>
+                  <Text style={styles.sub}>Diferencia: {formatMoney(d.diferencia)}</Text>
                 </View>
               </View>
             ))
@@ -464,8 +493,16 @@ export default function ListadoAsignacionesSemanales({ token }) {
   );
 }
 
+function getStatusStyle(estado) {
+  const value = String(estado || "").toLowerCase();
+  if (value.includes("pend")) return styles.statusWarning;
+  if (value.includes("comp") || value.includes("apro")) return styles.statusOk;
+  if (value.includes("rech")) return styles.statusError;
+  return styles.statusNeutral;
+}
+
 const styles = StyleSheet.create({
-  actionsRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  actionsRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
   tabRow: { flexDirection: "row", gap: 8, marginBottom: 10, flexWrap: "wrap" },
   tab: {
     paddingVertical: 6,
@@ -494,7 +531,16 @@ const styles = StyleSheet.create({
     borderColor: "#D9E5FF",
   },
   btnTextSecondary: { color: COLORS.blue2, fontWeight: "900" },
-  error: { color: COLORS.muted, fontWeight: "700", marginBottom: 8 },
+  errorBox: {
+    borderWidth: 1,
+    borderColor: "#F6C7CC",
+    backgroundColor: "#FFF1F2",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  error: { color: "#B42318", fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "700" },
   filterTitle: {
     fontWeight: "900",
@@ -522,16 +568,55 @@ const styles = StyleSheet.create({
   monthText: { fontWeight: "900", color: COLORS.text },
   monthTextActive: { color: "#fff" },
   yearSelect: { minWidth: 120 },
+  summaryRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
+  summaryRowMobile: {
+    flexWrap: "wrap",
+  },
+  summaryCard: {
+    flex: 1,
+    minWidth: 180,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#F8FAFF",
+  },
+  summaryLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 12, marginBottom: 4 },
+  summaryValue: { color: COLORS.text, fontWeight: "900", fontSize: 18 },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
+    alignItems: "flex-start",
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
+    gap: 10,
+  },
+  rowMobile: {
+    flexDirection: "column",
   },
   title: { fontWeight: "900", color: COLORS.text },
   sub: { marginTop: 4, color: COLORS.muted, fontWeight: "700" },
-  right: { alignItems: "flex-end" },
+  chipRow: { marginTop: 8, alignItems: "flex-start" },
+  statusChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontWeight: "900",
+    overflow: "hidden",
+    borderWidth: 1,
+    fontSize: 12,
+  },
+  statusOk: { backgroundColor: "#ECFDF3", color: "#027A48", borderColor: "#ABEFC6" },
+  statusWarning: { backgroundColor: "#FFF8E8", color: "#B54708", borderColor: "#F9D79B" },
+  statusError: { backgroundColor: "#FFF1F2", color: "#B42318", borderColor: "#F6C7CC" },
+  statusNeutral: { backgroundColor: "#EEF2F6", color: "#344054", borderColor: "#D0D5DD" },
+  right: { alignItems: "flex-end", gap: 4 },
+  rightMobile: { alignItems: "flex-start", width: "100%" },
   money: { fontWeight: "900", color: COLORS.text },
 });

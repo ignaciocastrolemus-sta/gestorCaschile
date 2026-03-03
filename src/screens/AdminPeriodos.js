@@ -149,7 +149,7 @@ export default function AdminPeriodos({ token }) {
 
   const onDelete = (p) => {
     if (loading) return;
-    const msg = `Â¿Eliminar ${p.nombre}?`;
+    const msg = `¿Eliminar ${p.nombre}?`;
     const proceed = typeof window !== "undefined" && window.confirm ? window.confirm(msg) : undefined;
     if (proceed === false) return;
     if (proceed === undefined) {
@@ -195,7 +195,7 @@ export default function AdminPeriodos({ token }) {
             value: globalSummary.inactivas,
             valueColor: "#C2410C",
           },
-          { key: "anios", label: "AÃ±os cargados", value: globalSummary.anios },
+          { key: "anios", label: "Años cargados", value: globalSummary.anios },
         ]}
       />
 
@@ -278,7 +278,11 @@ export default function AdminPeriodos({ token }) {
           )}
         </View>
 
-        {!!error && <Text style={styles.error}>{error}</Text>}
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.error}>{error}</Text>
+          </View>
+        )}
       </View>
 
       <View style={dash.panel}>
@@ -396,7 +400,16 @@ const styles = StyleSheet.create({
     borderColor: "#D9E5FF",
   },
   secondaryText: { color: COLORS.blue2, fontWeight: "900" },
-  error: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
+  errorBox: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#F6C7CC",
+    backgroundColor: "#FFF1F2",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  error: { color: "#B42318", fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "800" },
   monthWrap: { marginBottom: 12 },
   monthTitle: { fontWeight: "900", color: COLORS.text, marginBottom: 8 },

@@ -277,7 +277,7 @@ export default function useSecretariaForm(authToken) {
         });
       } catch (error) {
         if (error?.name === "AbortError") return;
-        console.log("Montos: error al cargar", error);
+        // Sin ruido en consola: el formulario puede seguir operando sin autocompletar montos.
       }
     })();
   }, [form.region, form.comuna, regionIdMap]);
