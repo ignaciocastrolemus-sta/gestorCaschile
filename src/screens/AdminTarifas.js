@@ -13,6 +13,7 @@ export default function AdminTarifas({ token }) {
   const [items, setItems] = useState([]);
   const [regiones, setRegiones] = useState([]);
   const [comunas, setComunas] = useState([]);
+  const [clientesDisponibles, setClientesDisponibles] = useState([]);
   const [periodos, setPeriodos] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +26,8 @@ export default function AdminTarifas({ token }) {
 
   const [form, setForm] = useState({
     regionId: "",
-    municipio: "",
+    comunaId: "",
+    idCliente: "",
     periodo: "",
     desayuno: "0",
     almuerzo: "0",
@@ -178,6 +180,75 @@ export default function AdminTarifas({ token }) {
     return base.filter((c) => Number(c.regionId) === selectedRegionId);
   }, [comunas, form.regionId]);
 
+  useEffect(() => {
+    async function fetchClientesPorComuna() {
+      if (!form.comunaId) {
+        setClientesDisponibles([]);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/Clientes?idComuna=${form.comunaId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          console.log("🚀 CLIENTES RECIBIDOS DESDE C#:", data)
+          setClientesDisponibles(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error("Error al cargar clientes:", error);
+      }
+    }
+    fetchClientesPorComuna();
+  }, [form.comunaId, token]);
+
+  // === NUEVO: AUTOFILTRAR TARIFAS AL SELECCIONAR CLIENTE ===
+  useEffect(() => {
+    // Si no hay cliente seleccionado, no hacemos nada
+    if (!form.idCliente) return;
+
+    // Buscamos si el cliente seleccionado ya existe en la grilla de abajo
+    const tarifaExistente = items.find(
+      (t) => String(t.idCliente) === String(form.idCliente)
+    );
+
+    if (tarifaExistente) {
+      // Si el cliente YA TIENE tarifa, la cargamos en el formulario
+      // (Verificamos que no estemos ya editando este mismo para evitar un ciclo infinito)
+      if (!editing || editing.idCliente !== tarifaExistente.idCliente) {
+        setEditing(tarifaExistente);
+        setForm((prev) => ({
+          ...prev,
+          // Mantenemos la región, comuna y cliente que el usuario acaba de elegir
+          // Solo actualizamos los montos y el periodo
+          periodo: String(tarifaExistente.periodo ?? tarifaExistente.Periodo ?? prev.periodo),
+          desayuno: String(tarifaExistente.desayuno ?? tarifaExistente.Desayuno ?? 0),
+          almuerzo: String(tarifaExistente.almuerzo ?? tarifaExistente.Almuerzo ?? 0),
+          once: String(tarifaExistente.once ?? tarifaExistente.Once ?? 0),
+          cena: String(tarifaExistente.cena ?? tarifaExistente.Cena ?? 0),
+          viatico: String(tarifaExistente.viatico ?? tarifaExistente.Viatico ?? 0),
+          activo: !!tarifaExistente.activo,
+        }));
+      }
+    } else {
+      // Si el cliente NO TIENE tarifa en la grilla, es una TARIFA NUEVA
+      // Limpiamos los montos a cero y quitamos el modo edición
+      if (editing) {
+        setEditing(null);
+      }
+      setForm((prev) => ({
+        ...prev,
+        desayuno: "0",
+        almuerzo: "0",
+        once: "0",
+        cena: "0",
+        viatico: "0",
+        activo: true,
+      }));
+    }
+  }, [form.idCliente, items]); // Se dispara cuando cambia el cliente o se recarga la tabla
+  // ==========================================================
+
   const regionNameById = useMemo(() => {
     const map = new Map();
     regionItems.forEach((r) => {
@@ -192,7 +263,8 @@ export default function AdminTarifas({ token }) {
     setEditing(null);
     setForm({
       regionId: "",
-      municipio: "",
+      comunaId: "",
+      idCliente: "",
       periodo: "",
       desayuno: "0",
       almuerzo: "0",
@@ -221,7 +293,7 @@ export default function AdminTarifas({ token }) {
       
       // Armamos el payload EXACTAMENTE como lo pide AsignacionClienteSaveDto en C#
       const payload = {
-        idCliente: editing.idCliente, 
+        idCliente: Number(form.idCliente), 
         idPeriodo: Number(form.periodo),
         montoDesayuno: Number(form.desayuno || 0),
         montoAlmuerzo: Number(form.almuerzo || 0),
@@ -261,11 +333,33 @@ export default function AdminTarifas({ token }) {
     }
   };
 
-  const onEdit = (t) => {
+  const onEdit = async (t) => {
+    // 1. Mostramos que estamos editando
     setEditing(t);
+    
+    // 2. Como la tabla no trae la comuna, la buscamos rápidamente usando el ID del cliente
+    let idComunaDelCliente = "";
+    if (t.idCliente) {
+      try {
+        // Llamamos al endpoint GetById de Clientes
+        const res = await fetch(`${API_BASE}/Clientes/${t.idCliente}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Según tu DTO (ClienteListDto), la propiedad llega como "comunaId"
+          idComunaDelCliente = String(data.comunaId || data.idComuna || "");
+        }
+      } catch (error) {
+        console.error("Error al obtener la comuna del cliente:", error);
+      }
+    }
+
+    // 3. Llenamos el formulario con los datos de la tarifa + la comuna que acabamos de descubrir
     setForm({
       regionId: String(t.regionId ?? t.RegionId ?? ""),
-      municipio: t.municipio ?? t.Municipio ?? "",
+      comunaId: idComunaDelCliente, // ¡Aquí insertamos la pieza faltante!
+      idCliente: String(t.idCliente ?? ""),
       periodo: String(t.periodo ?? t.Periodo ?? ""),
       desayuno: String(t.desayuno ?? t.Desayuno ?? 0),
       almuerzo: String(t.almuerzo ?? t.Almuerzo ?? 0),
@@ -362,23 +456,68 @@ export default function AdminTarifas({ token }) {
 
         <View style={styles.grid}>
           <View style={styles.col}>
-            <Text style={dash.label}>Region</Text>
+            <Text style={dash.label}>Región</Text>
             <View style={styles.selectWrap}>
               <Picker
                 selectedValue={form.regionId || ""}
                 onValueChange={(v) => {
                   setField("regionId", v);
-                  if (!editing) setField("municipio", "");
+                  setField("comunaId", ""); // Al cambiar región, limpiamos la comuna
+                  setField("idCliente", ""); // Y limpiamos el cliente
                 }}
                 style={styles.picker}
               >
-                <Picker.Item label="Selecciona region" value="" />
+                <Picker.Item label="Selecciona región" value="" />
                 {regionItems.map((r) => (
                   <Picker.Item key={String(r.id)} label={r.nombre} value={String(r.id)} />
                 ))}
               </Picker>
             </View>
           </View>
+         <View style={styles.col}>
+            <Text style={dash.label}>Comuna</Text>
+            <View style={styles.selectWrap}>
+              <Picker
+                selectedValue={form.comunaId || ""}
+                onValueChange={(v) => {
+                  setField("comunaId", v);
+                  setField("idCliente", ""); // Al cambiar comuna, limpiamos cliente
+                }}
+                style={styles.picker}
+                enabled={!!form.regionId} // Bloqueado si no hay región
+              >
+                <Picker.Item label="Selecciona comuna" value="" />
+                {comunasItems.map((c) => (
+                  <Picker.Item key={String(c.id)} label={c.nombre} value={String(c.id)} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.grid}>
+          <View style={styles.col}>
+            <Text style={dash.label}>Cliente (Municipio / Entidad)</Text>
+            <View style={styles.selectWrap}>
+              <Picker
+                selectedValue={form.idCliente || ""}
+                onValueChange={(v) => setField("idCliente", v)}
+                style={styles.picker}
+                enabled={!!form.comunaId} // Bloqueado si no hay comuna
+              >
+                <Picker.Item label="Selecciona cliente..." value="" />
+                {clientesDisponibles.map((c) => (
+                  <Picker.Item 
+                    // Maneja posibles nombres de variables del backend (camelCase o PascalCase)
+                    key={String(c.idCliente || c.IdCliente || c.id)} 
+                    label={c.nombreCliente || c.NombreCliente || c.razonSocial || c.nombre} 
+                    value={String(c.idCliente || c.IdCliente || c.id)} 
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+
           <View style={styles.col}>
             <Text style={dash.label}>Periodo</Text>
             <TextInput
@@ -389,20 +528,6 @@ export default function AdminTarifas({ token }) {
               style={dash.input}
             />
           </View>
-        </View>
-
-        <Text style={dash.label}>Municipio</Text>
-        <View style={styles.selectWrap}>
-          <Picker
-            selectedValue={form.municipio}
-            onValueChange={(v) => setField("municipio", v)}
-            style={styles.picker}
-          >
-            <Picker.Item label="Selecciona municipio" value="" />
-            {comunasItems.map((c) => (
-              <Picker.Item key={String(c.id)} label={c.nombre} value={c.nombre} />
-            ))}
-          </Picker>
         </View>
 
         <View style={styles.grid}>

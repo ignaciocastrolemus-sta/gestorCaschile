@@ -204,15 +204,15 @@ export default function useAuth() {
 
     try {
       setForceMsg("");
-      const res = await fetch(`${API_BASE}/Auth/change-password`, {
-        method: "POST",
+      const res = await fetch(`${API_BASE}/Auth/cambiar-password`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${pendingToken}`,
         },
         body: JSON.stringify({
-          currentPassword: forceCurrent,
-          newPassword: forceNew,
+          passwordActual: forceCurrent,
+          newPasswordNueva: forceNew,
         }),
       });
       if (!res.ok) {

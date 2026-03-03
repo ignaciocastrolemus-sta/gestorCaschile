@@ -22,6 +22,7 @@ export default function useSecretariaForm(authToken) {
   const lastMontosKey = useRef("");
   const montosAbortRef = useRef(null);
 
+  // 1. ESTADO INICIAL ACTUALIZADO AL NUEVO DESGLOSE
   const emptyForm = {
     fecha: formatFechaHoy(),
     fechaInicio: formatFechaHoy(),
@@ -33,8 +34,11 @@ export default function useSecretariaForm(authToken) {
     region: "",
     comuna: "",
     modalidad: "",
+    tipoTransporte: "", // <-- NUEVO
     observacion: "",
     dias: "",
+    
+    // Tarifas
     desayuno: "",
     almuerzo: "",
     once: "",
@@ -45,16 +49,20 @@ export default function useSecretariaForm(authToken) {
     noOnce: false,
     noCena: false,
     noViatico: false,
-    movAsignado: "",
-    transferUber: "",
-    colectivoTaxi: "",
+    
+    // Transporte y Otros (Nuevos campos)
+    bus: "",
+    uber: "",
+    transfer: "",
+    colectivo: "",
     peajes: "",
-    reembolsos: "",
+    estacionamiento: "",
+    combustible: "",
     varios: "",
-    copec: "",
   };
+  
   const [form, setForm] = useState({ ...emptyForm });
-  const[tarifasBackup, setTarifasBackup] = useState({});
+  const [tarifasBackup, setTarifasBackup] = useState({});
 
   const isValidFecha = (value) => !!parseFecha(value);
 
@@ -66,25 +74,21 @@ export default function useSecretariaForm(authToken) {
     if (!form.region.trim()) return "Region es obligatoria.";
     if (!form.comuna.trim()) return "Comuna es obligatoria.";
     if (!form.modalidad.trim()) return "Modalidad es obligatoria.";
+    
     const diasNum = Number(form.dias);
     if (!Number.isInteger(diasNum) || diasNum <= 0) return "Dias debe ser mayor a 0.";
+    
+    // Validamos que los nuevos montos no sean negativos
     const montos = [
-      form.desayuno,
-      form.almuerzo,
-      form.once,
-      form.cena,
-      form.viatico,
-      form.movAsignado,
-      form.transferUber,
-      form.colectivoTaxi,
-      form.peajes,
-      form.reembolsos,
-      form.varios,
-      form.copec,
+      form.desayuno, form.almuerzo, form.once, form.cena, form.viatico,
+      form.bus, form.uber, form.transfer, form.colectivo, 
+      form.peajes, form.estacionamiento, form.combustible, form.varios
     ].map(Number);
+    
     if (montos.some((n) => Number.isNaN(n) || n < 0)) {
       return "Los montos no pueden ser negativos.";
     }
+    
     const inicio = parseFecha(form.fechaInicio);
     const termino = parseFecha(form.fechaTermino);
     if (inicio && termino && termino < inicio) {
@@ -115,15 +119,11 @@ export default function useSecretariaForm(authToken) {
   };
 
   const updateNumero = (campo, valor) => {
-    // Convertimos en string, si viene null o undefined, lo dejamos como string vacío.
     const textoSeguro = (valor !== null && valor !== undefined) ? valor.toString() : "";
-    // se hace replace sabiendo que es texto
     const numeroLimpio = textoSeguro.replace(/[^0-9]/g, "");
     
-    // Se guarda en el estado principal
     setForm(prev => ({ ...prev, [campo]: numeroLimpio }));
 
-    // LO NUEVO: Se guarda en el respaldo SOLO si es un monto de la matriz
     const camposTarifa = ["desayuno", "almuerzo", "once", "cena", "viatico"];
     if (camposTarifa.includes(campo)) {
       setTarifasBackup(prev => ({ ...prev, [campo]: numeroLimpio }));
@@ -132,9 +132,7 @@ export default function useSecretariaForm(authToken) {
 
   const toggleNoAsignacion = (campoFlag, campoValor) => {
     setForm((prev) => {
-      const next = !prev[campoFlag]; // true si marca "No Aplica"
-      
-      // LO NUEVO: Buscamos en el backup al desmarcar
+      const next = !prev[campoFlag]; 
       const valorRecuperado = tarifasBackup[campoValor] !== undefined 
                               ? tarifasBackup[campoValor] 
                               : prev[campoValor];
@@ -148,10 +146,10 @@ export default function useSecretariaForm(authToken) {
   };
 
   const onGuardar = async () => {
-    const error = validarFormulario();
-    if (error) {
-      Alert.alert("Revisa el formulario", error);
-      setSaveMsg(error);
+    const errorFormato = validarFormulario();
+    if (errorFormato) {
+      Alert.alert("Revisa el formulario", errorFormato);
+      setSaveMsg(errorFormato);
       return;
     }
     if (!authToken) {
@@ -159,45 +157,44 @@ export default function useSecretariaForm(authToken) {
       return;
     }
 
-    // 1. Transformar fecha DD/MM/YYYY a YYYY-MM-DD para el DateOnly de .NET
     const [dia, mes, anio] = form.fechaInicio.split("/");
     const fechaInicioIso = `${anio}-${mes}-${dia}`;
 
-    // 2. Construir el DTO exacto (CrearViajeDto)
+    // 2. EL NUEVO PAYLOAD (Mapeo 1:1 con CrearViajeDto de C#)
     const payload = {
-      idUsuario: Number(form.idCapacitador), // Extraído desde el dropdown
-      idCliente: Number(form.idCliente),     // Extraído desde el dropdown
+      idUsuario: Number(form.idCapacitador), 
+      idCliente: Number(form.idCliente),     
       codigoOt: form.modalidad || "S/N",
       modalidad: form.modalidad,
+      tipoTransporte: form.tipoTransporte || "Otro", // Enviamos el nuevo campo
       observacion: form.observacion,
       fechaInicio: fechaInicioIso,
       dias: Number(form.dias),
       
-      // Toggles de Alimentación (El backend pide booleanos "Incluye", tu form usa "NoAplica")
       incluyeDesayuno: !form.noDesayuno,
       incluyeAlmuerzo: !form.noAlmuerzo,
       incluyeOnce: !form.noOnce,
       incluyeCena: !form.noCena,
       incluyeViatico: !form.noViatico,
 
-      // Gastos Manuales (Agrupando algunos valores según tu UI)
-      montoMovilizacion: Number(form.movAsignado || 0) + Number(form.colectivoTaxi || 0),
-      montoTransferUber: Number(form.transferUber || 0),
+      // Desglose exacto esperado por el Backend
+      montoBus: Number(form.bus || 0),
+      montoColectivo: Number(form.colectivo || 0),
+      montoTransfer: Number(form.transfer || 0),
+      montoUber: Number(form.uber || 0),
+      montoEstacionamiento: Number(form.estacionamiento || 0),
       montoPeajes: Number(form.peajes || 0),
-      montoCombustible: Number(form.copec || 0),
-      otrosGastos: Number(form.varios || 0) + Number(form.reembolsos || 0),
+      montoCombustible: Number(form.combustible || 0),
+      montoVarios: Number(form.varios || 0),
     };
 
     try {
-      // 3. Petición a la API
       await crearViaje(payload, authToken);
       Alert.alert("Éxito", "Asignación de viaje guardada correctamente.");
       setSaveMsg("Guardado con éxito.");
-      resetSecretaria(); // Limpiar el formulario
+      resetSecretaria(); 
     } catch (error) {
-      // C# arroja excepciones de regla de negocio (InvalidOperationException)
-      // Aseguramos que el usuario lea si "la semana está cerrada" o "sin tarifa"
-      Alert.alert("Error de Validación", error?.message || "No se pudo guardar la asignación.");
+      Alert.alert("Error al Guardar", error?.message || "No se pudo guardar la asignación.");
       setSaveMsg("Error al guardar.");
     }
   };
@@ -248,6 +245,7 @@ export default function useSecretariaForm(authToken) {
     };
   }, []);
 
+  // Hook para cargar tarifas automáticamente si cambia la comuna/región
   useEffect(() => {
     const regionId = regionNombreToId(form.region, regionIdMap);
     const comunaSeleccionada = (form.comuna || "").trim();
@@ -263,6 +261,7 @@ export default function useSecretariaForm(authToken) {
 
     (async () => {
       try {
+        // Asumiendo que obtenerMontos hace fetch al backend y devuelve las tarifas.
         const data = await obtenerMontos(regionId, comunaSeleccionada, controller.signal);
         if (!data) return;
         setForm((prev) => {

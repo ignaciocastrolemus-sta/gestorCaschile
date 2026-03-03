@@ -56,6 +56,7 @@ const DropdownSelector = ({ label, value, placeholder, isOpen, onToggle, data, o
 );
 
 // --- COMPONENTE MINI CALENDARIO (RESTRINGIDO) ---
+// (Mantenido exactamente igual, funciona perfecto)
 const CalendarioGrid = ({ onSelectDate, semanaActiva }) => {
   const [fechaVis, setFechaVis] = React.useState(new Date());
 
@@ -78,7 +79,6 @@ const CalendarioGrid = ({ onSelectDate, semanaActiva }) => {
       dias.push(<View key={`empty-${i}`} style={{ width: '14.2%' }} />);
     }
 
-    // Lógica para deshabilitar días fuera de la semana elegida
     let dInicio = null;
     let dTermino = null;
     if (semanaActiva && semanaActiva.fechaInicio && semanaActiva.fechaTermino) {
@@ -90,7 +90,6 @@ const CalendarioGrid = ({ onSelectDate, semanaActiva }) => {
       const fechaActualIteracion = new Date(fechaVis.getFullYear(), fechaVis.getMonth(), i);
       let isHabilitado = true;
 
-      // Si tenemos semana activa, verificamos que el día esté en el rango
       if (dInicio && dTermino) {
         if (fechaActualIteracion < dInicio || fechaActualIteracion > dTermino) {
           isHabilitado = false;
@@ -105,7 +104,7 @@ const CalendarioGrid = ({ onSelectDate, semanaActiva }) => {
             width: '14.2%', paddingVertical: 10, alignItems: 'center',
             backgroundColor: pressed ? '#e0e0e0' : 'transparent', 
             borderRadius: 20,
-            opacity: isHabilitado ? 1 : 0.2 // Se vuelve fantasma si está fuera de la semana
+            opacity: isHabilitado ? 1 : 0.2 
           })}
           onPress={() => {
             const diaStr = String(i).padStart(2, '0');
@@ -148,13 +147,11 @@ const obtenerEtiquetaSemana = (fechaInicioStr, fechaTerminoStr) => {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
-  // Función interna para parsear la fecha venga como venga
   const parsear = (str) => {
     if (str.includes("/")) {
       const [d, m, y] = str.split("/").map(Number);
       return new Date(y, m - 1, d);
     }
-    // Si viene como YYYY-MM-DD
     const [y, m, d] = str.split("T")[0].split("-").map(Number);
     return new Date(y, m - 1, d);
   };
@@ -182,8 +179,8 @@ export default function FormularioGasto({
   const [capacitadores, setCapacitadores] = React.useState([]);
   const [clientesDisponibles, setClientesDisponibles] = React.useState([]);
   
-  const [semanasAbiertas, setSemanasAbiertas] = React.useState([]); // Pool de semanas
-  const [semanaActiva, setSemanaActiva] = React.useState(null); // Semana seleccionada
+  const [semanasAbiertas, setSemanasAbiertas] = React.useState([]);
+  const [semanaActiva, setSemanaActiva] = React.useState(null);
   
   const [calendarOpen, setCalendarOpen] = React.useState(false);
   const [campoAEditar, setCampoAEditar] = React.useState(null);
@@ -195,7 +192,6 @@ export default function FormularioGasto({
   
   const [menuAbierto, setMenuAbierto] = React.useState(null); 
 
-  // --- 1. CARGA INICIAL ---
   React.useEffect(() => {
     if (!token) return;
     (async () => {
@@ -206,12 +202,9 @@ export default function FormularioGasto({
           obtenerSemanas(token)
         ]);
 
-        // Guardamos TODAS las semanas que estén abiertas en el Pool
         const abiertas = Array.isArray(semRes) 
           ? semRes.filter(s => s.esAbierta === true || s.EsAbierta === true).map(s => {
-              // Calculamos la etiqueta
               const etiqueta = obtenerEtiquetaSemana(s.fechaInicio || s.FechaInicio, s.fechaTermino || s.FechaTermino);
-              // Retornamos la semana modificando solo su nombre para que incluya la etiqueta
               return {
                 ...s,
                 nombre: `${s.nombre || s.Nombre}${etiqueta}` 
@@ -221,7 +214,6 @@ export default function FormularioGasto({
         
         setSemanasAbiertas(abiertas);
 
-        // Si hay al menos una, la seleccionamos por defecto
         if (abiertas.length > 0) {
           setSemanaActiva(abiertas[0]);
           onTextChange("idSemana", abiertas[0].idSemana || abiertas[0].IdSemana);
@@ -233,7 +225,6 @@ export default function FormularioGasto({
     })();
   }, [token]);
 
-  // --- 2. CASCADA: REGIÓN -> COMUNA ---
   React.useEffect(() => {
     if (form.idRegion) {
       obtenerMunicipios(form.idRegion, token)
@@ -247,7 +238,6 @@ export default function FormularioGasto({
     }
   }, [form.idRegion, token]);
 
-  // --- 3. CASCADA: COMUNA -> CLIENTE ---
   React.useEffect(() => {
     if (form.idComuna) {
       obtenerClientesPorComuna(form.idComuna, token)
@@ -261,7 +251,6 @@ export default function FormularioGasto({
     }
   }, [form.idComuna, token]);
 
-  // --- 4. CÁLCULO DE FECHAS (Sin Fines de Semana) ---
   const parseFecha = (v) => {
     if (!v) return null;
     const [d, m, y] = v.split("/").map(Number);
@@ -279,7 +268,6 @@ export default function FormularioGasto({
 
         while (fechaTemp <= termino) {
           const diaSemana = fechaTemp.getDay();
-          // Saltar 0 (Domingo) y 6 (Sábado)
           if (diaSemana !== 0 && diaSemana !== 6) {
             diasHabiles++;
           }
@@ -296,17 +284,14 @@ export default function FormularioGasto({
   }, [form.fechaInicio, form.fechaTermino]);
 
   const handleGuardarViaje = () => {
-    // 1. Verificamos que estén las fechas
     if (!form.fechaInicio || !form.fechaTermino) {
       alert("Faltan las fechas del viaje. Por favor, selecciónelas en el calendario.");
       return;
     }
 
-    // 2. Parseamos las fechas del formulario (formato DD/MM/YYYY)
     const inicioViaje = parseFecha(form.fechaInicio);
     const terminoViaje = parseFecha(form.fechaTermino);
 
-    // 3. Parseamos las fechas de la semana activa (Vienen de la API como YYYY-MM-DD)
     const inicioSemanaStr = semanaActiva.fechaInicio || semanaActiva.FechaInicio;
     const terminoSemanaStr = semanaActiva.fechaTermino || semanaActiva.FechaTermino;
     
@@ -316,24 +301,43 @@ export default function FormularioGasto({
     const [yT, mT, dT] = terminoSemanaStr.split("T")[0].split("-").map(Number);
     const terminoSemana = new Date(yT, mT - 1, dT, 23, 59, 59);
 
-    // 4. La validación de fuego
     if (inicioViaje < inicioSemana || terminoViaje > terminoSemana) {
       alert("¡Error! Las fechas ingresadas no corresponden a la semana seleccionada. Modifique las fechas o seleccione otra semana.");
-      return; // Abortamos la misión
+      return; 
     }
 
-    // Si todo está correcto, llamamos a la función onSave original
     if (onSave) onSave();
   };
 
-  // --- 5. TOTALES ---
+  // --- 5. CÁLCULO DE TOTALES ACTUALIZADO ---
   const subtotalTarifas = Number(form.desayuno || 0) + Number(form.almuerzo || 0) + Number(form.once || 0) + Number(form.cena || 0) + Number(form.viatico || 0);
   const totalAsignacion = subtotalTarifas * Number(form.dias || 0);
-  const totalManual = Number(form.movAsignado || 0) + Number(form.transferUber || 0) + Number(form.peajes || 0) + Number(form.copec || 0) + Number(form.varios || 0);
+  
+  // AHORA SUMAMOS TODOS LOS CAMPOS NUEVOS PARA QUE EL KPI SEA REAL
+  const totalManual = 
+    Number(form.bus || 0) + 
+    Number(form.colectivo || 0) + 
+    Number(form.transfer || 0) + 
+    Number(form.uber || 0) + 
+    Number(form.estacionamiento || 0) + 
+    Number(form.peajes || 0) + 
+    Number(form.combustible || 0) + 
+    Number(form.varios || 0);
+
   const presupuestoTotal = totalAsignacion + totalManual;
+
   const opcionesModalidad = [
     { id: "Terreno", nombre: "Terreno" },
     { id: "Remoto", nombre: "Remoto" }
+  ];
+
+  // NUEVO: Opciones para el Tipo de Transporte
+  const opcionesTransporte = [
+    { id: "Vehículo Empresa", nombre: "Vehículo Empresa" },
+    { id: "Vehículo Propio", nombre: "Vehículo Propio" },
+    { id: "Bus", nombre: "Bus" },
+    { id: "Avión", nombre: "Avión" },
+    { id: "Otro", nombre: "Otro" }
   ];
 
   return (
@@ -351,7 +355,7 @@ export default function FormularioGasto({
         </View>
 
         <KpiRow items={[
-          { key: "kpi-dias", label: "Días a pagar", value: form.dias || 0 },
+          { key: "kpi-dias", label: "Días Laborales", value: form.dias || 0 },
           { key: "kpi-total", label: "Presupuesto Total", value: `$${presupuestoTotal.toLocaleString("es-CL")}` }
         ]} />
 
@@ -361,45 +365,16 @@ export default function FormularioGasto({
         <View style={[dash.panel, { zIndex: 1000 }]}>
           <Text style={dash.panelTitle}>Datos del viaje</Text>
 
-          {/* NUEVO SELECTOR DE SEMANAS (Z-INDEX ALTO) */}
           <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'sem' ? 4000 : 1 }}>
-            <DropdownSelector
-              label="Semana a Planificar"
-              placeholder="Seleccione la semana..."
-              value={semanaActiva ? (semanaActiva.nombre || semanaActiva.Nombre) : ""}
-              isOpen={menuAbierto === 'sem'}
-              onToggle={() => setMenuAbierto(menuAbierto === 'sem' ? null : 'sem')}
-              data={semanasAbiertas}
-              onSelect={(item, nombre, id) => {
-                setSemanaActiva(item);
-                onTextChange("idSemana", id);
-                setMenuAbierto(null);
-                
-                // Limpiamos las fechas si cambia de semana para evitar errores
-                onTextChange("fechaInicio", "");
-                onTextChange("fechaTermino", "");
-                onNumberChange("dias", "0");
-              }}
-            />
+            <DropdownSelector label="Semana a Planificar" placeholder="Seleccione la semana..." value={semanaActiva ? (semanaActiva.nombre || semanaActiva.Nombre) : ""} isOpen={menuAbierto === 'sem'} onToggle={() => setMenuAbierto(menuAbierto === 'sem' ? null : 'sem')} data={semanasAbiertas} onSelect={(item, nombre, id) => { setSemanaActiva(item); onTextChange("idSemana", id); setMenuAbierto(null); onTextChange("fechaInicio", ""); onTextChange("fechaTermino", ""); onNumberChange("dias", "0"); }} />
           </View>
 
           <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'cap' ? 3000 : 1 }}>
-            <DropdownSelector
-              label="Capacitador Asignado"
-              placeholder="Seleccione capacitador..."
-              value={form.capacitador}
-              isOpen={menuAbierto === 'cap'}
-              onToggle={() => setMenuAbierto(menuAbierto === 'cap' ? null : 'cap')}
-              data={capacitadores}
-              onSelect={(item, nombre, id) => {
-                onTextChange("capacitador", nombre);
-                onTextChange("idCapacitador", id);
-                setMenuAbierto(null);
-              }}
-            />
+            <DropdownSelector label="Capacitador Asignado" placeholder="Seleccione capacitador..." value={form.capacitador} isOpen={menuAbierto === 'cap'} onToggle={() => setMenuAbierto(menuAbierto === 'cap' ? null : 'cap')} data={capacitadores} onSelect={(item, nombre, id) => { onTextChange("capacitador", nombre); onTextChange("idCapacitador", id); setMenuAbierto(null); }} />
           </View>
 
-          <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'mod' ? 2500 : 1 }}>
+          {/* AQUI AGREGAMOS LA MODALIDAD Y EL NUEVO TIPO DE TRANSPORTE EN LA MISMA FILA */}
+          <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'mod' || menuAbierto === 'transp' ? 2500 : 1 }}>
             <DropdownSelector
               label="Modalidad de Trabajo"
               placeholder="Seleccione modalidad..."
@@ -412,89 +387,36 @@ export default function FormularioGasto({
                 setMenuAbierto(null);
               }}
             />
+            
+            {/* NUEVO SELECTOR: Tipo Transporte */}
+            <DropdownSelector
+              label="Tipo Transporte"
+              placeholder="Seleccione..."
+              value={form.tipoTransporte}
+              isOpen={menuAbierto === 'transp'}
+              onToggle={() => setMenuAbierto(menuAbierto === 'transp' ? null : 'transp')}
+              data={opcionesTransporte}
+              onSelect={(item, nombre, id) => {
+                onTextChange("tipoTransporte", id);
+                setMenuAbierto(null);
+              }}
+            />
           </View>
 
           <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'reg' || menuAbierto === 'mun' ? 2000 : 1 }}>
-            <DropdownSelector
-              label="Región"
-              placeholder="Elegir región..."
-              value={form.region}
-              isOpen={menuAbierto === 'reg'}
-              onToggle={() => setMenuAbierto(menuAbierto === 'reg' ? null : 'reg')}
-              data={regiones}
-              onSelect={(item, nombre, id) => {
-                onTextChange("region", nombre);
-                onTextChange("idRegion", id);
-                onTextChange("comuna", "");
-                onTextChange("idComuna", "");
-                onTextChange("cliente", "");
-                onTextChange("idCliente", "");
-                setClientesDisponibles([]); 
-                setMenuAbierto(null);
-              }}
-            />
-
-            <DropdownSelector
-              label="Comuna"
-              placeholder="Elegir comuna..."
-              value={form.comuna}
-              isOpen={menuAbierto === 'mun'}
-              onToggle={() => setMenuAbierto(menuAbierto === 'mun' ? null : 'mun')}
-              data={municipios}
-              onSelect={(item, nombre, id) => {
-                onTextChange("comuna", nombre);
-                onTextChange("idComuna", id);
-                onTextChange("cliente", "");
-                onTextChange("idCliente", "");
-                setMenuAbierto(null);
-              }}
-            />
+            <DropdownSelector label="Región" placeholder="Elegir región..." value={form.region} isOpen={menuAbierto === 'reg'} onToggle={() => setMenuAbierto(menuAbierto === 'reg' ? null : 'reg')} data={regiones} onSelect={(item, nombre, id) => { onTextChange("region", nombre); onTextChange("idRegion", id); onTextChange("comuna", ""); onTextChange("idComuna", ""); onTextChange("cliente", ""); onTextChange("idCliente", ""); setClientesDisponibles([]); setMenuAbierto(null); }} />
+            <DropdownSelector label="Comuna" placeholder="Elegir comuna..." value={form.comuna} isOpen={menuAbierto === 'mun'} onToggle={() => setMenuAbierto(menuAbierto === 'mun' ? null : 'mun')} data={municipios} onSelect={(item, nombre, id) => { onTextChange("comuna", nombre); onTextChange("idComuna", id); onTextChange("cliente", ""); onTextChange("idCliente", ""); setMenuAbierto(null); }} />
           </View>
 
           <View style={{ flexDirection: 'row', zIndex: menuAbierto === 'cli' ? 1000 : 1 }}>
-            <DropdownSelector
-              label="Cliente / Institución"
-              placeholder="Seleccione el cliente..."
-              value={form.cliente}
-              isOpen={menuAbierto === 'cli'}
-              onToggle={() => setMenuAbierto(menuAbierto === 'cli' ? null : 'cli')}
-              data={clientesDisponibles}
-              onSelect={async (item, nombre, id) => {
-                onTextChange("cliente", nombre);
-                onTextChange("idCliente", id);
-                setMenuAbierto(null);
-                
-                try {
-                  const t = await obtenerTarifasPorCliente(id, token);
-                  const v = t.find(x => x.activo || x.Activo) || t[0];
-                  if (v) {
-                    onNumberChange("desayuno", v.montoDesayuno || v.MontoDesayuno || 0);
-                    onNumberChange("almuerzo", v.montoAlmuerzo || v.MontoAlmuerzo || 0);
-                    onNumberChange("once", v.montoOnce || v.MontoOnce || 0);
-                    onNumberChange("cena", v.montoCena || v.MontoCena || 0);
-                    onNumberChange("viatico", v.montoViatico || v.MontoViatico || 0);
-                  }
-                } catch (e) { console.error("Error tarifas:", e); }
-              }}
-            />
+            <DropdownSelector label="Cliente / Institución" placeholder="Seleccione el cliente..." value={form.cliente} isOpen={menuAbierto === 'cli'} onToggle={() => setMenuAbierto(menuAbierto === 'cli' ? null : 'cli')} data={clientesDisponibles} onSelect={async (item, nombre, id) => { onTextChange("cliente", nombre); onTextChange("idCliente", id); setMenuAbierto(null); try { const t = await obtenerTarifasPorCliente(id, token); const v = t.find(x => x.activo || x.Activo) || t[0]; if (v) { onNumberChange("desayuno", v.montoDesayuno || v.MontoDesayuno || 0); onNumberChange("almuerzo", v.montoAlmuerzo || v.MontoAlmuerzo || 0); onNumberChange("once", v.montoOnce || v.MontoOnce || 0); onNumberChange("cena", v.montoCena || v.MontoCena || 0); onNumberChange("viatico", v.montoViatico || v.MontoViatico || 0); } } catch (e) { console.error("Error tarifas:", e); } }} />
           </View>
 
           <View style={dash.grid3}>
             <Field label="Días Laborales" value={form.dias} onChangeText={v => onNumberChange("dias", v)} keyboardType="numeric" />
-            
-            <Pressable style={{flex: 1}} onPress={() => abrirCalendario('fechaInicio')}>
-              <View pointerEvents="none">
-                <Field label="Fecha Inicio" value={form.fechaInicio} disabled />
-              </View>
-            </Pressable>
-            
-            <Pressable style={{flex: 1}} onPress={() => abrirCalendario('fechaTermino')}>
-              <View pointerEvents="none">
-                <Field label="Fecha Término" value={form.fechaTermino} disabled />
-              </View>
-            </Pressable>
+            <Pressable style={{flex: 1}} onPress={() => abrirCalendario('fechaInicio')}><View pointerEvents="none"><Field label="Fecha Inicio" value={form.fechaInicio} disabled /></View></Pressable>
+            <Pressable style={{flex: 1}} onPress={() => abrirCalendario('fechaTermino')}><View pointerEvents="none"><Field label="Fecha Término" value={form.fechaTermino} disabled /></View></Pressable>
           </View>
-
         </View>
 
         {/* ========================================== */}
@@ -518,40 +440,58 @@ export default function FormularioGasto({
         </View>
 
         {/* ========================================== */}
-        {/* BOX 3: OTROS GASTOS                        */}
+        {/* BOX 3: OTROS GASTOS (NUEVO DESGLOSE)       */}
         {/* ========================================== */}
         <View style={[dash.panel, { zIndex: 5 }]}>
-          <Text style={dash.panelTitle}>Otros Gastos (Rendición Manual)</Text>
+          <Text style={dash.panelTitle}>Gastos Rendibles</Text>
+          
+          <Text style={{ fontSize: 13, color: COLORS.muted, marginBottom: 8, fontWeight: 'bold' }}>1. Transporte</Text>
           <View style={dash.grid3}>
-            <Field label="Movilidad Asignada" value={form.movAsignado} onChangeText={v => onNumberChange("movAsignado", v)} keyboardType="numeric" />
-            <Field label="Uber/Transfer" value={form.transferUber} onChangeText={v => onNumberChange("transferUber", v)} keyboardType="numeric" />
+            {/* NUEVOS CAMPOS MAPEAODOS EXACTAMENTE COMO EN EL BACKEND */}
+            <Field label="Bus (Interurbano)" value={form.bus} onChangeText={v => onNumberChange("bus", v)} keyboardType="numeric" />
+            <Field label="Uber" value={form.uber} onChangeText={v => onNumberChange("uber", v)} keyboardType="numeric" />
+            <Field label="Transfer" value={form.transfer} onChangeText={v => onNumberChange("transfer", v)} keyboardType="numeric" />
+          </View>
+          
+          <View style={dash.grid3}>
+            <Field label="Colectivo / Taxi" value={form.colectivo} onChangeText={v => onNumberChange("colectivo", v)} keyboardType="numeric" />
+          </View>
+
+          <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 15, marginBottom: 8, fontWeight: 'bold' }}>2. Vehículos y Ruta</Text>
+          <View style={dash.grid3}>
+            <Field label="Combustible" value={form.combustible} onChangeText={v => onNumberChange("combustible", v)} keyboardType="numeric" />
             <Field label="Peajes" value={form.peajes} onChangeText={v => onNumberChange("peajes", v)} keyboardType="numeric" />
+            <Field label="Estacionamiento" value={form.estacionamiento} onChangeText={v => onNumberChange("estacionamiento", v)} keyboardType="numeric" />
           </View>
+
+          <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 15, marginBottom: 8, fontWeight: 'bold' }}>3. Extras</Text>
           <View style={dash.grid3}>
-            <Field label="Combustible" value={form.copec} onChangeText={v => onNumberChange("copec", v)} keyboardType="numeric" />
-            <Field label="Varios" value={form.varios} onChangeText={v => onNumberChange("varios", v)} keyboardType="numeric" />
-            <View style={{ marginTop: 10, marginBottom: 15 }}>
-             <Field 
-               label="Observaciones (Opcional)" 
-               value={form.observacion} 
-               onChangeText={v => onTextChange("observacion", v)} 
-               placeholder="Ej: Viaje incluye parada en sucursal norte..."
-             />
+            <Field label="Varios / Reembolsos" value={form.varios} onChangeText={v => onNumberChange("varios", v)} keyboardType="numeric" />
           </View>
-            <Pressable 
-              style={[dash.saveBtn, !semanaActiva && { backgroundColor: '#ccc' }]} 
-              onPress={handleGuardarViaje} 
-              disabled={!semanaActiva}
-            >
-              <Text style={dash.saveText}>{semanaActiva ? "Guardar Viaje" : "Cerrado"}</Text>
-            </Pressable>
+
+          <View style={{ marginTop: 10, marginBottom: 15 }}>
+            <Field 
+              label="Observaciones (Opcional)" 
+              value={form.observacion} 
+              onChangeText={v => onTextChange("observacion", v)} 
+              placeholder="Ej: Viaje incluye parada en sucursal norte..."
+            />
           </View>
+          
+          <Pressable 
+            style={[dash.saveBtn, !semanaActiva && { backgroundColor: '#ccc' }]} 
+            onPress={handleGuardarViaje} 
+            disabled={!semanaActiva}
+          >
+            <Text style={dash.saveText}>{semanaActiva ? "Guardar Viaje" : "Cerrado"}</Text>
+          </Pressable>
+          
           {!!saveMsg && <Text style={dash.saveMsg}>{saveMsg}</Text>}
         </View>
 
       </ScrollView>
 
-      {/* OVERLAY DEL CALENDARIO CON GRILLA RESTRINGIDA */}
+      {/* OVERLAY DEL CALENDARIO */}
       {calendarOpen && (
         <View style={{
           position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
@@ -565,7 +505,7 @@ export default function FormularioGasto({
             </Text>
             
             <CalendarioGrid 
-              semanaActiva={semanaActiva} // Le pasamos la semana para que bloquee los días
+              semanaActiva={semanaActiva}
               onSelectDate={(fechaFormateada) => {
                 if (campoAEditar) onTextChange(campoAEditar, fechaFormateada); 
                 setCalendarOpen(false);
@@ -587,32 +527,7 @@ export default function FormularioGasto({
 }
 
 const styles = StyleSheet.create({
-  banner: {
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 2,
-    backgroundColor: '#fff',
-    marginBottom: 20
-  },
-  dropdownAbs: {
-    position: 'absolute',
-    top: 65,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#4a90e2', 
-    borderRadius: 4,
-    zIndex: 9999,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-  },
-  dropdownItem: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee'
-  }
+  banner: { padding: 15, borderRadius: 8, borderWidth: 2, backgroundColor: '#fff', marginBottom: 20 },
+  dropdownAbs: { position: 'absolute', top: 65, left: 0, right: 0, backgroundColor: '#fff', borderWidth: 1, borderColor: '#4a90e2', borderRadius: 4, zIndex: 9999, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6 },
+  dropdownItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#eee' }
 });

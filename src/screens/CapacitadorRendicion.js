@@ -10,11 +10,14 @@ import KpiRow from "../components/KpiRow";
 
 // Capacitador: formulario de rendicion con adjuntos y montos
 const CATEGORIAS = [
-  { key: "transporte", label: "Transporte / Uber / Taxi" },
-  { key: "peajes", label: "Peajes" },
-  { key: "reembolsos", label: "Reembolsos / Descuentos" },
-  { key: "varios", label: "Varios" },
-  { key: "copec", label: "Combustible" },
+  { key: "bus", label: "Bus Interurbano" },
+  { key: "colectivo", label: "Colectivo / Taxi" },
+  { key: "transfer", label: "Transfer Aeropuerto" },
+  { key: "uber", label: "Uber / Didi / Cabify" },
+  { key: "estacionamiento", label: "Estacionamiento / Parquímetro" },
+  { key: "peajes", label: "Peajes / TAG" },
+  { key: "combustible", label: "Combustible" },
+  { key: "varios", label: "Gastos Varios" },
 ];
 
 export default function CapacitadorRendicion({ token, selectedViajeId, selectedContext }) {
@@ -41,8 +44,35 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
       const txt = await res.text();
       throw new Error(txt || "Error al cargar viajes");
     }
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const rawData = await res.json();
+    const arrayData = Array.isArray(rawData) ? rawData : (rawData?.data || []);
+
+    // LA ADUANA: Convertimos los nombres de C# (PascalCase) a los de JS (camelCase)
+    return arrayData.map((v) => ({
+      ...v, // Mantiene los datos originales por si acaso
+      id: v.id || v.IdAsignacionViaje || v.idAsignacionViaje,
+      estado: v.estado || v.Estado || "Pendiente",
+      municipio: v.municipio || v.comuna || v.CodigoOt || "Viaje sin destino",
+      fechaInicio: v.fechaInicio || v.FechaInicio,
+      fechaTermino: v.fechaTermino || v.FechaTermino,
+      
+      // Normalizamos las columnas rendibles
+      montoBus: Number(v.montoBus ?? v.MontoBus ?? 0),
+      montoColectivo: Number(v.montoColectivo ?? v.MontoColectivo ?? 0),
+      montoTransfer: Number(v.montoTransfer ?? v.MontoTransfer ?? 0),
+      montoUber: Number(v.montoUber ?? v.MontoUber ?? 0),
+      montoEstacionamiento: Number(v.montoEstacionamiento ?? v.MontoEstacionamiento ?? 0),
+      montoPeajes: Number(v.montoPeajes ?? v.MontoPeajes ?? 0),
+      montoCombustible: Number(v.montoCombustible ?? v.MontoCombustible ?? 0),
+      montoVarios: Number(v.montoVarios ?? v.MontoVarios ?? 0),
+
+      // Normalizamos las comidas
+      montoDesayuno: Number(v.montoDesayuno ?? v.MontoDesayuno ?? 0),
+      montoAlmuerzo: Number(v.montoAlmuerzo ?? v.MontoAlmuerzo ?? 0),
+      montoOnce: Number(v.montoOnce ?? v.MontoOnce ?? 0),
+      montoCena: Number(v.montoCena ?? v.MontoCena ?? 0),
+      montoViatico: Number(v.montoViatico ?? v.MontoViatico ?? 0),
+    }));
   }, [token]);
 
   const fetchRendiciones = React.useCallback(async () => {
@@ -131,6 +161,8 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
     if (estado.includes("justific")) return false;
     if (estado.includes("rechaz")) return true;
     if (estado.includes("pend")) return true;
+    if (estado.includes("asignado")) return true;
+    if (estado.includes("transferido")) return true;
     return false;
   }, []);
 
@@ -207,23 +239,25 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
   const asignacionesPorDia = useMemo(() => {
     if (!viaje) return [];
     return [
-      { key: "desayuno", label: "Desayuno", monto: Number(viaje.desayuno || 0) },
-      { key: "almuerzo", label: "Almuerzo", monto: Number(viaje.almuerzo || 0) },
-      { key: "once", label: "Once", monto: Number(viaje.once || 0) },
-      { key: "cena", label: "Cena", monto: Number(viaje.cena || 0) },
-      { key: "viatico", label: "Viatico", monto: Number(viaje.viatico || 0) },
+      { key: "desayuno", label: "Desayuno", monto: Number(viaje.montoDesayuno || viaje.MontoDesayuno || 0) },
+      { key: "almuerzo", label: "Almuerzo", monto: Number(viaje.montoAlmuerzo || viaje.MontoAlmuerzo || 0) },
+      { key: "once", label: "Once", monto: Number(viaje.montoOnce || viaje.MontoOnce || 0) },
+      { key: "cena", label: "Cena", monto: Number(viaje.montoCena || viaje.MontoCena || 0) },
+      { key: "viatico", label: "Viático", monto: Number(viaje.montoViatico || viaje.MontoViatico || 0) },
     ];
   }, [viaje]);
 
   const asignadoPorCategoria = useMemo(() => {
     if (!viaje) return {};
     return {
-      transporte:
-        Number(viaje.movAsignado || 0) + Number(viaje.transferUber || 0) + Number(viaje.colectivoTaxi || 0),
-      peajes: Number(viaje.peajes || 0),
-      reembolsos: Number(viaje.reembolsos || 0),
-      varios: Number(viaje.varios || 0),
-      copec: Number(viaje.copec || 0),
+      bus: Number(viaje.montoBus || viaje.MontoBus || 0),
+      colectivo: Number(viaje.montoColectivo || viaje.MontoColectivo || 0),
+      transfer: Number(viaje.montoTransfer || viaje.MontoTransfer || 0),
+      uber: Number(viaje.montoUber || viaje.MontoUber || 0),
+      estacionamiento: Number(viaje.montoEstacionamiento || viaje.MontoEstacionamiento || 0),
+      peajes: Number(viaje.montoPeajes || viaje.MontoPeajes || 0),
+      combustible: Number(viaje.montoCombustible || viaje.MontoCombustible || 0),
+      varios: Number(viaje.montoVarios || viaje.MontoVarios || 0),
     };
   }, [viaje]);
 
@@ -446,18 +480,28 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
           </View>
         ) : null}
         <View style={styles.selector}>
-          {viajesVisibles.map((v) => (
-            <Pressable
-              key={v.id}
-              style={[styles.selectorItem, v.id === selectedId && styles.selectorItemActive]}
-              onPress={() => setSelectedId(v.id)}
-            >
-              <Text style={styles.selectorTitle}>{v.municipio || v.comuna}</Text>
-              <Text style={styles.selectorSub}>
-                {v.regionNombre || ""} - {formatRango(v.fechaInicio, v.fechaTermino)}
-              </Text>
-            </Pressable>
-          ))}
+          {viajesVisibles.map((v) => {
+            // Normalizamos el ID y las fechas para que no falle sin importar cómo vengan del backend
+            const viajeId = v.id || v.idAsignacionViaje || v.IdAsignacionViaje;
+            const fInicio = v.fechaInicio || v.FechaInicio;
+            const fTermino = v.fechaTermino || v.FechaTermino;
+            
+            // Usamos un nombre de fallback si no tienes municipio o comuna en la BD
+            const tituloViaje = v.municipio || v.comuna || v.CodigoOt || `Viaje #${viajeId}`;
+
+            return (
+              <Pressable
+                key={viajeId}
+                style={[styles.selectorItem, viajeId === selectedId && styles.selectorItemActive]}
+                onPress={() => setSelectedId(viajeId)}
+              >
+                <Text style={styles.selectorTitle}>{tituloViaje}</Text>
+                <Text style={styles.selectorSub}>
+                  {formatRango(fInicio, fTermino)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
         {viajesFiltrados.length > 6 && (
           <View style={styles.showMoreRow}>

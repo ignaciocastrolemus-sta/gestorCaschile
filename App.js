@@ -71,7 +71,7 @@ export default function App() {
     if (role === "administrador") {
       return <AdminHome token={authToken} onLogout={handleLogout} email={authEmail} />;
     }
-    if (role === "usuario terreno") {
+    if (role === "usuario terreno" || role === "capacitador") {
       return <CapacitadorHome onLogout={handleLogout} token={authToken} />;
     }
     if (role === "contadora") {
