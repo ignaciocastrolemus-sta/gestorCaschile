@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, ScrollView, Pressable, Modal } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Field, Small } from "../components/FormFields";
@@ -431,8 +431,31 @@ export default function FormularioGasto({
         )}
       </View>
 
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryTitle}>Resumen rapido del viaje</Text>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryPill}>
+            <Text style={styles.summaryLabel}>Region</Text>
+            <Text style={styles.summaryValue}>{form.region || "-"}</Text>
+          </View>
+          <View style={styles.summaryPill}>
+            <Text style={styles.summaryLabel}>Comuna</Text>
+            <Text style={styles.summaryValue}>{form.comuna || "-"}</Text>
+          </View>
+          <View style={styles.summaryPill}>
+            <Text style={styles.summaryLabel}>Modalidad</Text>
+            <Text style={styles.summaryValue}>{form.modalidad || "-"}</Text>
+          </View>
+          <View style={styles.summaryPill}>
+            <Text style={styles.summaryLabel}>Dias</Text>
+            <Text style={styles.summaryValue}>{diasParaCalculo || 0}</Text>
+          </View>
+        </View>
+      </View>
+
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Asignaciones (por dia)</Text>
+        <Text style={styles.panelHint}>Montos diarios definidos por tarifa y periodo activo.</Text>
 
         <View style={dash.grid5}>
           <Small
@@ -482,6 +505,7 @@ export default function FormularioGasto({
 
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Gastos ingresados manualmente</Text>
+        <Text style={styles.panelHint}>Estos montos se suman como ajustes operativos del viaje.</Text>
 
         <View style={dash.grid3}>
           <Field
@@ -618,3 +642,29 @@ export default function FormularioGasto({
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  summaryCard: {
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 12,
+    backgroundColor: "#F8FAFF",
+    padding: 12,
+  },
+  summaryTitle: { color: COLORS.text, fontWeight: "900", marginBottom: 8, fontSize: 14 },
+  summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  summaryPill: {
+    minWidth: 130,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  summaryLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 11 },
+  summaryValue: { color: COLORS.text, fontWeight: "800", marginTop: 3, fontSize: 13 },
+  panelHint: { color: COLORS.muted, fontWeight: "700", marginBottom: 10, fontSize: 12, lineHeight: 17 },
+});

@@ -1,7 +1,8 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
+import { ScrollView, View, Text, Pressable, Alert, TextInput, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
@@ -35,6 +36,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const [expandedCaps, setExpandedCaps] = useState({});
   const [visibleGroups, setVisibleGroups] = useState(6);
   const [historialMes, setHistorialMes] = useState("todos");
+  const [pendientesFiltros, setPendientesFiltros] = useState({ estado: "Todos", q: "" });
+  const pendientesBusquedaDebounced = useDebouncedValue(pendientesFiltros.q, 220);
   const [sendingContadoraById, setSendingContadoraById] = useState({});
   const [justifyingById, setJustifyingById] = useState({});
   const [liftingById, setLiftingById] = useState({});
@@ -393,7 +396,21 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     [saldosCerradosFiltrados, historialMes, exportSummary]
   );
 
-  const pendientesAgrupados = useMemo(() => groupRendicionesByCapacitador(items), [items]);
+  const itemsFiltrados = useMemo(() => {
+    const q = normalizeText(pendientesBusquedaDebounced);
+    return (items || []).filter((it) => {
+      const estado = String(it?.estado || "").toLowerCase();
+      if (pendientesFiltros.estado === "Secretaria" && !estado.includes("secretaria")) return false;
+      if (pendientesFiltros.estado === "Justificada" && !estado.includes("justific")) return false;
+      const searchable = normalizeText(
+        `${it?.id || ""} ${it?.viaje?.capacitador || ""} ${it?.viaje?.municipio || ""} ${it?.viaje?.regionNombre || ""}`
+      );
+      if (q && !searchable.includes(q)) return false;
+      return true;
+    });
+  }, [items, pendientesFiltros.estado, pendientesBusquedaDebounced]);
+
+  const pendientesAgrupados = useMemo(() => groupRendicionesByCapacitador(itemsFiltrados), [itemsFiltrados]);
 
   useEffect(() => {
     setVisibleGroups(6);
@@ -455,30 +472,63 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
         <Text style={dash.panelTitle}>Pendientes de revision</Text>
         <StatusMessage tone="error" text={error} />
         <StatusMessage tone="info" text={info} />
+        <View style={pendingUiStyles.filtersWrap}>
+          <TextInput
+            value={pendientesFiltros.q}
+            onChangeText={(value) => setPendientesFiltros((prev) => ({ ...prev, q: value }))}
+            placeholder="Buscar por capacitador, destino o id..."
+            style={pendingUiStyles.searchInput}
+          />
+          <View style={pendingUiStyles.chipsRow}>
+            <Pressable
+              style={quickFilterBtn(pendientesFiltros.estado === "Todos")}
+              onPress={() => setPendientesFiltros((prev) => ({ ...prev, estado: "Todos" }))}
+            >
+              <Text style={quickFilterText(pendientesFiltros.estado === "Todos")}>Todos</Text>
+            </Pressable>
+            <Pressable
+              style={quickFilterBtn(pendientesFiltros.estado === "Secretaria")}
+              onPress={() => setPendientesFiltros((prev) => ({ ...prev, estado: "Secretaria" }))}
+            >
+              <Text style={quickFilterText(pendientesFiltros.estado === "Secretaria")}>Pendiente secretaria</Text>
+            </Pressable>
+            <Pressable
+              style={quickFilterBtn(pendientesFiltros.estado === "Justificada")}
+              onPress={() => setPendientesFiltros((prev) => ({ ...prev, estado: "Justificada" }))}
+            >
+              <Text style={quickFilterText(pendientesFiltros.estado === "Justificada")}>Justificada</Text>
+            </Pressable>
+          </View>
+        </View>
 
         {pendientesAgrupados.length === 0 ? (
           <Text style={{ color: "#6B7280", fontWeight: "700", marginTop: 8 }}>
-            No hay rendiciones pendientes.
+            No hay rendiciones para el filtro seleccionado.
           </Text>
         ) : (
           <>
             {pendientesAgrupados.slice(0, visibleGroups).map((grupo) => (
               <View
                 key={grupo.key}
-                style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: "#E5E7EB", paddingTop: 10 }}
+                style={pendingUiStyles.groupCard}
               >
                 <Pressable
-                  style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+                  style={pendingUiStyles.groupHeader}
                   onPress={() => setExpandedCaps((prev) => ({ ...prev, [grupo.key]: !prev[grupo.key] }))}
                 >
-                  <View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={pendingUiStyles.groupIconWrap}>
+                      <MaterialCommunityIcons name="account-group-outline" size={15} color="#1D4ED8" />
+                    </View>
+                    <View>
                     <Text style={dash.docTitle}>{grupo.capacitador}</Text>
                     <Text style={dash.docSub}>
                       Rendiciones: {grupo.count} | Asignado: $ {grupo.totalAsignado.toLocaleString("es-CL")} |
                       Rendido: $ {grupo.totalRendido.toLocaleString("es-CL")}
                     </Text>
+                    </View>
                   </View>
-                  <Text style={{ color: "#1D4ED8", fontWeight: "900" }}>
+                  <Text style={{ color: "#1D4ED8", fontWeight: "900", fontSize: 12 }}>
                     {expandedCaps[grupo.key] ? "Ocultar" : "Ver"}
                   </Text>
                 </Pressable>
@@ -487,6 +537,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                       <ViajeRowCard
                         key={item.id}
                         data={item}
+                        token={token}
                         onEnviar={() => onEnviarContadora(item.id)}
                         onJustificar={() => onJustificar(item.id)}
                         sending={!!sendingContadoraById[item.id]}
@@ -800,9 +851,62 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   );
 }
 
-function ViajeRowCard({ data, onEnviar, onJustificar, sending = false, justifying = false }) {
-  const onDownload = () => {
-    Alert.alert("Adjuntos", "Los adjuntos se validan en backend. Descarga sera agregada luego.");
+function ViajeRowCard({ data, token, onEnviar, onJustificar, sending = false, justifying = false }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 1180;
+  const [adjuntosOpen, setAdjuntosOpen] = useState(false);
+  const [adjuntosLoading, setAdjuntosLoading] = useState(false);
+  const [adjuntosError, setAdjuntosError] = useState("");
+  const [adjuntos, setAdjuntos] = useState([]);
+
+  const onToggleAdjuntos = async () => {
+    const nextOpen = !adjuntosOpen;
+    setAdjuntosOpen(nextOpen);
+    if (!nextOpen || adjuntos.length > 0) return;
+
+    try {
+      setAdjuntosLoading(true);
+      setAdjuntosError("");
+      const res = await fetch(`${API_BASE}/Rendiciones/${data.id}/adjuntos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "No se pudieron cargar adjuntos.");
+      }
+      const rows = await res.json();
+      setAdjuntos(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      setAdjuntosError(e?.message || "No se pudieron cargar adjuntos.");
+    } finally {
+      setAdjuntosLoading(false);
+    }
+  };
+
+  const onDownloadAdjunto = async (adjuntoId, fileName) => {
+    try {
+      if (typeof window === "undefined" || typeof document === "undefined") {
+        throw new Error("La descarga de adjuntos esta disponible en web.");
+      }
+      const res = await fetch(`${API_BASE}/Rendiciones/adjuntos/${adjuntoId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "No se pudo descargar.");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName || "adjunto";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      Alert.alert("Adjuntos", e?.message || "No se pudo descargar.");
+    }
   };
   const detalles = Array.isArray(data.detalles) ? data.detalles : [];
   const totalAdjuntos = detalles.reduce((acc, d) => acc + (d.adjuntos?.length || 0), 0);
@@ -811,19 +915,19 @@ function ViajeRowCard({ data, onEnviar, onJustificar, sending = false, justifyin
     data.tipoResultado || (diferencia > 0 ? "Reembolso" : diferencia < 0 ? "Devolucion" : "Cuadrada");
   const guidance = resolveGuidance(data);
   return (
-    <View style={dash.docRow}>
+    <View style={[dash.docRow, rowCardStyles.container, compact ? rowCardStyles.containerCompact : null]}>
       <View style={{ flex: 1 }}>
         <Text style={[dash.docTitle, { fontSize: 17 }]}>Rendicion #{data.id}</Text>
         <View style={guidance.badgeStyle}>
           <Text style={guidance.badgeTextStyle}>{guidance.badgeLabel}</Text>
         </View>
-        <Text style={[dash.docSub, { fontSize: 13 }]}>
-          Capacitador: {data.viaje?.capacitador || "-"} - {data.viaje?.regionNombre || "-"} -{" "}
-          {data.viaje?.municipio || "-"}
-        </Text>
-        <Text style={[dash.docSub, { fontSize: 13 }]}>
-          Fechas: {formatRango(data.viaje?.fechaInicio, data.viaje?.fechaTermino)}
-        </Text>
+
+        <View style={rowCardStyles.metaGrid}>
+          <InfoPill icon="account-outline" tag="CAP" value={data.viaje?.capacitador || "-"} />
+          <InfoPill icon="map-marker-outline" tag="DES" value={`${data.viaje?.regionNombre || "-"} - ${data.viaje?.municipio || "-"}`} />
+          <InfoPill icon="calendar-range" tag="FEC" value={formatRango(data.viaje?.fechaInicio, data.viaje?.fechaTermino) || "-"} />
+        </View>
+
         <Text style={[dash.docSub, { fontSize: 14, fontWeight: "800", color: "#111827" }]}>
           Asignado: $ {Number(data.totalAsignado || 0).toLocaleString("es-CL")} - Rendido: ${" "}
           {Number(data.totalRendido || 0).toLocaleString("es-CL")}
@@ -831,31 +935,76 @@ function ViajeRowCard({ data, onEnviar, onJustificar, sending = false, justifyin
         <Text style={[dash.docSub, { fontSize: 14, fontWeight: "800", color: "#111827" }]}>
           Diferencia: $ {diferencia.toLocaleString("es-CL")} - Resultado: {tipoResultado}
         </Text>
-        <Text style={dash.docSub}>Adjuntos: {totalAdjuntos}</Text>
+        <Text style={dash.docSub}>Adjuntos: {adjuntos.length || totalAdjuntos}</Text>
+        {adjuntosOpen ? (
+          <View style={rowCardStyles.adjuntosBox}>
+            {adjuntosLoading ? <Text style={dash.docSub}>Cargando adjuntos...</Text> : null}
+            {adjuntosError ? <Text style={[dash.docSub, { color: "#B91C1C" }]}>{adjuntosError}</Text> : null}
+            {!adjuntosLoading && !adjuntosError && adjuntos.length === 0 ? (
+              <Text style={dash.docSub}>No hay adjuntos disponibles.</Text>
+            ) : null}
+            {adjuntos.map((a) => (
+              <View key={`adj-${data.id}-${a.id}`} style={rowCardStyles.adjuntoRow}>
+                <Text numberOfLines={1} style={rowCardStyles.adjuntoName}>
+                  {a.nombreArchivo || "adjunto"}
+                </Text>
+                <Pressable style={rowCardStyles.adjuntoBtn} onPress={() => onDownloadAdjunto(a.id, a.nombreArchivo)}>
+                  <Text style={rowCardStyles.adjuntoBtnText}>Descargar</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
         <Text style={[dash.docSub, { color: "#1D4ED8", fontWeight: "800" }]}>{guidance.prompt}</Text>
       </View>
-      <View style={{ gap: 8 }}>
+      <View style={[rowCardStyles.actionsCol, compact ? rowCardStyles.actionsColCompact : null]}>
         <Pressable
-          style={[dash.docBtn, { backgroundColor: "#1D4ED8", opacity: sending ? 0.7 : 1 }]}
+          style={[dash.docBtn, rowCardStyles.actionBtn, { backgroundColor: "#1D4ED8", opacity: sending ? 0.7 : 1 }]}
           onPress={onEnviar}
           disabled={sending}
         >
-          <Text style={dash.docBtnText}>{sending ? "Enviando..." : "Enviar a contadora"}</Text>
+          <Text style={dash.docBtnText}>
+            <MaterialCommunityIcons name="send" size={12} color="#fff" />
+            {sending ? " Enviando..." : " Enviar a contadora"}
+          </Text>
         </Pressable>
-        <Pressable style={dash.docBtn} onPress={onDownload}>
-          <Text style={dash.docBtnText}>Ver adjuntos</Text>
+        <Pressable style={[dash.docBtn, rowCardStyles.actionBtn]} onPress={onToggleAdjuntos}>
+          <Text style={dash.docBtnText}>
+            <MaterialCommunityIcons name="paperclip" size={12} color="#fff" />
+            {adjuntosOpen ? " Ocultar adjuntos" : " Ver adjuntos"}
+          </Text>
         </Pressable>
         <Pressable
           style={[
             dash.docBtn,
+            rowCardStyles.actionBtn,
             { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF", opacity: justifying ? 0.7 : 1 },
           ]}
           onPress={onJustificar}
           disabled={justifying}
         >
-          <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>{justifying ? "Justificando..." : "Justificar"}</Text>
+          <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>
+            <MaterialCommunityIcons name="file-document-edit-outline" size={12} color="#1D4ED8" />
+            {justifying ? " Justificando..." : " Justificar"}
+          </Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function InfoPill({ icon, tag, value }) {
+  return (
+    <View style={rowCardStyles.pill}>
+      <View style={rowCardStyles.pillIconWrap}>
+        <MaterialCommunityIcons name={icon} size={13} color="#1D4ED8" />
+      </View>
+      <View style={rowCardStyles.pillTag}>
+        <Text style={rowCardStyles.pillTagText}>{tag}</Text>
+      </View>
+      <Text numberOfLines={1} style={rowCardStyles.pillValue}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -997,6 +1146,157 @@ const summaryValueStyle = {
   color: "#111827",
   fontWeight: "900",
   fontSize: 16,
+};
+
+const rowCardStyles = {
+  container: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  containerCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  metaGrid: {
+    marginTop: 8,
+    marginBottom: 6,
+    gap: 6,
+  },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#F8FAFF",
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  pillIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF3FF",
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+  },
+  pillTag: {
+    minWidth: 30,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: "#E8F0FF",
+    borderWidth: 1,
+    borderColor: "#BFD4FF",
+  },
+  pillTagText: {
+    textAlign: "center",
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#1D4ED8",
+  },
+  pillValue: {
+    flex: 1,
+    color: "#374151",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  actionsCol: {
+    gap: 8,
+    minWidth: 170,
+  },
+  actionsColCompact: {
+    width: "100%",
+    minWidth: 0,
+  },
+  actionBtn: {
+    minHeight: 38,
+  },
+  adjuntosBox: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 10,
+    backgroundColor: "#F8FAFF",
+    padding: 8,
+    gap: 6,
+  },
+  adjuntoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  adjuntoName: {
+    flex: 1,
+    color: "#374151",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  adjuntoBtn: {
+    borderWidth: 1,
+    borderColor: "#BFD4FF",
+    backgroundColor: "#EEF3FF",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  adjuntoBtnText: {
+    color: "#1D4ED8",
+    fontWeight: "900",
+    fontSize: 11,
+  },
+};
+
+const pendingUiStyles = {
+  filtersWrap: {
+    marginTop: 10,
+    marginBottom: 6,
+    gap: 8,
+  },
+  searchInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFFFFF",
+    color: "#111827",
+  },
+  chipsRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  groupCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    backgroundColor: "#FBFCFF",
+    padding: 10,
+  },
+  groupHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  groupIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF3FF",
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+  },
 };
 
 

@@ -1,6 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
@@ -582,18 +581,34 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                     const saldoPendiente = Number(r.saldoPendiente || 0);
                     const canRegistrar = saldoEstado === "Pendiente" && saldoPendiente > 0;
                     return (
-                      <View key={`saldo-${r.id}`} style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: COLORS.grayBorder, paddingTop: 10 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View key={`saldo-${r.id}`} style={styles.saldoItemCard}>
+                        <View style={styles.saldoItemHeader}>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.line}>Rendicion #{r.id} - {r.viaje?.municipio || "-"}</Text>
-                            <Text style={styles.detailHint}>
-                              Tipo: {resolveTipoResultado(r)} | Estado: {saldoEstado} | Pendiente: $ {saldoPendiente.toLocaleString("es-CL")}
-                            </Text>
+                            <View style={styles.saldoMetaRow}>
+                              <Text
+                                style={[
+                                  styles.saldoMetaBadge,
+                                  resolveTipoResultado(r) === "Reembolso" ? styles.saldoMetaFavor : styles.saldoMetaContra,
+                                ]}
+                              >
+                                {resolveTipoResultado(r)}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.saldoMetaBadge,
+                                  saldoEstado === "Pendiente" ? styles.saldoMetaPendiente : styles.saldoMetaCerrado,
+                                ]}
+                              >
+                                {saldoEstado}
+                              </Text>
+                              <Text style={styles.saldoMonto}>Pendiente: $ {saldoPendiente.toLocaleString("es-CL")}</Text>
+                            </View>
                           </View>
-                          <View style={{ gap: 8 }}>
+                          <View style={styles.saldoActionCol}>
                             {canRegistrar ? (
                               <Pressable
-                                style={[styles.approveBtn, registrandoSaldoById[r.id] && { opacity: 0.7 }]}
+                                style={[styles.approveBtn, styles.saldoActionBtn, registrandoSaldoById[r.id] && { opacity: 0.7 }]}
                                 onPress={() => onRegistrarSaldo(r)}
                                 disabled={!!registrandoSaldoById[r.id]}
                               >
@@ -606,11 +621,11 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                                 </Text>
                               </Pressable>
                             ) : (
-                              <View style={[styles.historyBtn, { backgroundColor: "#E5E7EB", borderColor: COLORS.grayBorder }]}>
-                                <Text style={[styles.historyBtnText, { color: "#4B5563" }]}>Saldo cerrado</Text>
+                              <View style={styles.saldoClosedBtn}>
+                                <Text style={styles.saldoClosedText}>Saldo cerrado</Text>
                               </View>
                             )}
-                            <Pressable style={styles.historyBtn} onPress={() => onToggleMovimientos(r.id)}>
+                            <Pressable style={[styles.historyBtn, styles.saldoActionBtn]} onPress={() => onToggleMovimientos(r.id)}>
                               <Text style={styles.historyBtnText}>{movOpenById[r.id] ? "Ocultar movimientos" : "Ver movimientos"}</Text>
                             </Pressable>
                           </View>
@@ -674,13 +689,20 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Historial reciente de saldos cerrados</Text>
         <View style={[styles.actionsRow, { marginTop: 8, marginBottom: 8, flexWrap: "wrap" }]}>
-          <View style={styles.monthSelectWrap}>
-            <Picker selectedValue={historialMes} onValueChange={setHistorialMes} style={styles.monthPicker}>
-              {historialMesOptions.map((opt) => (
-                <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
-              ))}
-            </Picker>
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.monthChipRow}>
+            {historialMesOptions.map((opt) => {
+              const active = historialMes === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.monthChip, active && styles.monthChipActive]}
+                  onPress={() => setHistorialMes(opt.value)}
+                >
+                  <Text style={[styles.monthChipText, active && styles.monthChipTextActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           <Pressable style={styles.historyBtn} onPress={() => onExportHistorial("excel")}>
             <Text style={styles.historyBtnText}>Descargar Excel</Text>
           </Pressable>
@@ -875,21 +897,23 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
                         <View style={styles.actionsRow}>
                           <Pressable
-                            style={[styles.approveBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
+                            style={[styles.approveBtn, styles.actionMainBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
                             onPress={() => onResolver(r.id, true)}
                             disabled={!!resolviendoById[r.id]}
                           >
                             <Text style={styles.approveText}>{resolviendoById[r.id] ? "Procesando..." : "Aprobar"}</Text>
                           </Pressable>
                           <Pressable
-                            style={[styles.historyBtn, justificandoById[r.id] && { opacity: 0.7 }]}
+                            style={[styles.secondaryBtn, styles.actionMainBtn, justificandoById[r.id] && { opacity: 0.7 }]}
                             onPress={() => onJustificar(r.id)}
                             disabled={!!justificandoById[r.id] || !!resolviendoById[r.id]}
                           >
-                            <Text style={styles.historyBtnText}>{justificandoById[r.id] ? "Justificando..." : "Justificar"}</Text>
+                            <Text style={styles.secondaryBtnText}>
+                              {justificandoById[r.id] ? "Justificando..." : "Justificar"}
+                            </Text>
                           </Pressable>
                           <Pressable
-                            style={[styles.rejectBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
+                            style={[styles.rejectBtn, styles.actionMainBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
                             onPress={() => onResolver(r.id, false)}
                             disabled={!!resolviendoById[r.id]}
                           >
@@ -1028,9 +1052,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
   },
   groupHeader: {
     flexDirection: "row",
@@ -1049,7 +1078,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.grayBorder,
   },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTitle: { fontWeight: "900", color: COLORS.text, fontSize: 17 },
+  cardTitle: { fontWeight: "900", color: COLORS.text, fontSize: 16 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "#EEF3FF" },
   badgeText: { fontWeight: "800", color: COLORS.text, fontSize: 12 },
   line: { marginTop: 4, color: COLORS.text, fontWeight: "700", fontSize: 14 },
@@ -1066,7 +1095,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 16,
   },
-  sectionTitle: { marginTop: 12, fontWeight: "900", color: COLORS.blue2 },
+  sectionTitle: { marginTop: 12, marginBottom: 2, fontWeight: "900", color: COLORS.blue2, fontSize: 15 },
   detailHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1084,7 +1113,7 @@ const styles = StyleSheet.create({
   },
   detailLabel: { fontWeight: "800", color: COLORS.text, fontSize: 15 },
   detailValue: { fontWeight: "900", color: COLORS.text, fontSize: 16 },
-  detailHint: { color: COLORS.muted, fontWeight: "700" },
+  detailHint: { color: COLORS.muted, fontWeight: "700", lineHeight: 18 },
   saldoFilterRow: { flexDirection: "row", gap: 8, marginTop: 8, marginBottom: 8, flexWrap: "wrap" },
   financeRow: { marginTop: 8 },
   nextActionBox: {
@@ -1111,6 +1140,41 @@ const styles = StyleSheet.create({
   financeContra: { backgroundColor: "#FFEFEF", borderColor: "#F3B6B6" },
   financeCuadra: { backgroundColor: "#E7F8ED", borderColor: "#BFE8CB" },
   ruleHint: { marginTop: 8, color: COLORS.muted, fontWeight: "700", fontSize: 12 },
+  saldoItemCard: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayBorder,
+    paddingTop: 10,
+  },
+  saldoItemHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  saldoMetaRow: { marginTop: 6, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
+  saldoMetaBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    fontSize: 11,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+  saldoMetaFavor: { backgroundColor: "#FFF4E5", borderColor: "#FFD39A" },
+  saldoMetaContra: { backgroundColor: "#FFEFEF", borderColor: "#F3B6B6" },
+  saldoMetaPendiente: { backgroundColor: "#E8F0FF", borderColor: "#BFD4FF" },
+  saldoMetaCerrado: { backgroundColor: "#EAF7EF", borderColor: "#BFE7CC" },
+  saldoMonto: { color: COLORS.text, fontWeight: "900", fontSize: 12 },
+  saldoActionCol: { gap: 8 },
+  saldoActionBtn: { minWidth: 150 },
+  saldoClosedBtn: {
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saldoClosedText: { color: "#4B5563", fontWeight: "900", fontSize: 12 },
   saldoRow: {
     marginTop: 10,
     flexDirection: "row",
@@ -1128,7 +1192,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   historyBtn: {
-    paddingVertical: 7,
+    height: 36,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
@@ -1153,7 +1217,7 @@ const styles = StyleSheet.create({
   downloadText: { color: "#fff", fontWeight: "900", fontSize: 12 },
   input: {
     marginTop: 6,
-    height: 40,
+    minHeight: 40,
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
     borderRadius: 10,
@@ -1161,33 +1225,50 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: "#fff",
   },
-  monthSelectWrap: {
-    minWidth: 240,
+  monthChipRow: { gap: 8, paddingRight: 4 },
+  monthChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: "#D9E5FF",
-    borderRadius: 10,
-    overflow: "hidden",
     backgroundColor: "#fff",
   },
-  monthPicker: {
-    height: 38,
-    color: COLORS.text,
+  monthChipActive: {
+    backgroundColor: "#E8F0FF",
+    borderColor: "#BFD4FF",
   },
-  actionsRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  monthChipText: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
+  monthChipTextActive: { color: COLORS.blue2 },
+  actionsRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
+  actionMainBtn: { flex: 1, minWidth: 140 },
   approveBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#2E7D32",
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#1F7A36",
+    borderWidth: 1,
+    borderColor: "#17642C",
     alignItems: "center",
     justifyContent: "center",
   },
   approveText: { color: "#fff", fontWeight: "900" },
+  secondaryBtn: {
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#BFD4FF",
+    backgroundColor: "#EEF3FF",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  secondaryBtnText: { color: COLORS.blue2, fontWeight: "900" },
   rejectBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#C62828",
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#B42318",
+    borderWidth: 1,
+    borderColor: "#8F1C13",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1212,7 +1293,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  pageText: { color: COLORS.muted, fontWeight: "800" },
+  pageText: { color: COLORS.muted, fontWeight: "800", minWidth: 130, textAlign: "center" },
 });
 
 

@@ -27,6 +27,22 @@ const formatPeriodoLabel = (p) => {
   return nombre;
 };
 
+const estadoBadgeStyle = (estado) => {
+  const key = String(estado || "").toLowerCase();
+  if (key === "pendiente") return { backgroundColor: "#FFF4E5", borderColor: "#FFD39A" };
+  if (key === "asignada") return { backgroundColor: "#E8F0FF", borderColor: "#BFD4FF" };
+  if (key === "completada") return { backgroundColor: "#EAF7EF", borderColor: "#BFE7CC" };
+  return { backgroundColor: "#F3F4F6", borderColor: "#D1D5DB" };
+};
+
+const estadoBadgeTextStyle = (estado) => {
+  const key = String(estado || "").toLowerCase();
+  if (key === "pendiente") return { color: "#B45309" };
+  if (key === "asignada") return { color: COLORS.blue2 };
+  if (key === "completada") return { color: "#0D8A42" };
+  return { color: "#4B5563" };
+};
+
 export default function AsignacionSemanal({ token }) {
   const [items, setItems] = useState([]);
   const [periodos, setPeriodos] = useState([]);
@@ -461,30 +477,44 @@ export default function AsignacionSemanal({ token }) {
         <Text style={{ color: COLORS.muted, fontWeight: "700" }}>No hay asignaciones.</Text>
       ) : (
         filteredItems.map((it) => (
-          <View key={it.id} style={styles.listRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.listTitle}>Id: {it.id}</Text>
-              <Text style={styles.listSub}>
-                Semana:{" "}
-                {periodosLabelById[String(it.periodoId ?? it.PeriodoId)] ||
-                  String(it.periodoId ?? it.PeriodoId)}
-              </Text>
-              <Text style={styles.listSub}>
-                Capacitador: {getLabel(capacitadoresItems, it.capacitadorId ?? it.CapacitadorId)}
-              </Text>
-              <Text style={styles.listSub}>
-                Cliente: {getLabel(clientesItems, it.clienteId ?? it.ClienteId)}
-              </Text>
-              <Text style={styles.listSub}>
-                Region: {getLabel(regionesItems, it.regionId ?? it.RegionId)}
-              </Text>
-              <Text style={styles.listSub}>Estado: {it.estado ?? it.Estado}</Text>
+          <View key={it.id} style={styles.listCard}>
+            <View style={styles.listCardHeader}>
+              <Text style={styles.listTitle}>Asignacion #{it.id}</Text>
+              <View style={[styles.statusBadge, estadoBadgeStyle(it.estado ?? it.Estado)]}>
+                <Text style={[styles.statusBadgeText, estadoBadgeTextStyle(it.estado ?? it.Estado)]}>
+                  {it.estado ?? it.Estado}
+                </Text>
+              </View>
             </View>
+
+            <View style={styles.listMetaGrid}>
+              <View style={styles.listMetaItem}>
+                <Text style={styles.listMetaLabel}>Semana</Text>
+                <Text style={styles.listMetaValue}>
+                  {periodosLabelById[String(it.periodoId ?? it.PeriodoId)] || String(it.periodoId ?? it.PeriodoId)}
+                </Text>
+              </View>
+              <View style={styles.listMetaItem}>
+                <Text style={styles.listMetaLabel}>Capacitador</Text>
+                <Text style={styles.listMetaValue}>
+                  {getLabel(capacitadoresItems, it.capacitadorId ?? it.CapacitadorId)}
+                </Text>
+              </View>
+              <View style={styles.listMetaItem}>
+                <Text style={styles.listMetaLabel}>Cliente</Text>
+                <Text style={styles.listMetaValue}>{getLabel(clientesItems, it.clienteId ?? it.ClienteId)}</Text>
+              </View>
+              <View style={styles.listMetaItem}>
+                <Text style={styles.listMetaLabel}>Region</Text>
+                <Text style={styles.listMetaValue}>{getLabel(regionesItems, it.regionId ?? it.RegionId)}</Text>
+              </View>
+            </View>
+
             <View style={styles.actions}>
-              <Pressable style={styles.smallBtn} onPress={() => onEdit(it)}>
+              <Pressable style={[styles.smallBtn, styles.actionBtn]} onPress={() => onEdit(it)}>
                 <Text style={styles.smallBtnText}>Editar</Text>
               </Pressable>
-              <Pressable style={styles.smallBtnDanger} onPress={() => onDelete(it)}>
+              <Pressable style={[styles.smallBtnDanger, styles.actionBtn]} onPress={() => onDelete(it)}>
                 <Text style={styles.smallBtnText}>Eliminar</Text>
               </Pressable>
             </View>
@@ -555,17 +585,44 @@ const styles = StyleSheet.create({
   monthText: { fontWeight: "900", color: COLORS.text },
   monthTextActive: { color: "#fff" },
   yearSelect: { minWidth: 120 },
-  listRow: {
+  listCard: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    backgroundColor: "#fff",
+    marginBottom: 10,
+  },
+  listCardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayBorder,
+    justifyContent: "space-between",
+    marginBottom: 10,
   },
   listTitle: { fontWeight: "900", color: COLORS.text },
+  statusBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  statusBadgeText: { fontWeight: "900", fontSize: 12 },
+  listMetaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  listMetaItem: {
+    minWidth: 180,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#F8FAFF",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  listMetaLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
+  listMetaValue: { color: COLORS.text, fontWeight: "800", marginTop: 2, fontSize: 13 },
   listSub: { marginTop: 2, color: COLORS.muted, fontWeight: "700" },
-  actions: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  actionBtn: { minWidth: 90, alignItems: "center" },
   smallBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,

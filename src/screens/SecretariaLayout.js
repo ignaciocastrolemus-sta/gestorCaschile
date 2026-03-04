@@ -7,6 +7,7 @@ import FormularioGasto from "./FormularioGasto";
 import CarpetaViajes from "./CarpetaViajes";
 import AsignacionSemanal from "./AsignacionSemanal";
 import TransferenciasSecretaria from "./TransferenciasSecretaria";
+import EncuadreRendiciones from "./EncuadreRendiciones";
 
 export default function SecretariaLayout({
   onLogout,
@@ -81,6 +82,11 @@ export default function SecretariaLayout({
             active={activeMenu === "transfer"}
             onPress={() => setActiveMenu("transfer")}
           />
+          <MenuItem
+            label="Encuadre"
+            active={activeMenu === "encuadre"}
+            onPress={() => setActiveMenu("encuadre")}
+          />
         </View>
 
         <View style={dash.content}>
@@ -92,6 +98,8 @@ export default function SecretariaLayout({
             <AsignacionSemanal token={authToken} />
           ) : activeMenu === "transfer" ? (
             <TransferenciasSecretaria token={authToken} />
+          ) : activeMenu === "encuadre" ? (
+            <EncuadreRendiciones token={authToken} />
           ) : (
             <FormularioGasto
               tipo={tipoViaje}
