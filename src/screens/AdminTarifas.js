@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
@@ -21,6 +21,8 @@ export default function AdminTarifas({ token }) {
   const [listPeriodo, setListPeriodo] = useState("");
   const [listQuery, setListQuery] = useState("");
   const [listActivo, setListActivo] = useState("");
+  const [listPage, setListPage] = useState(1);
+  const listPageSize = 12;
 
   const [form, setForm] = useState({
     regionId: "",
@@ -229,6 +231,19 @@ export default function AdminTarifas({ token }) {
       return muni.includes(q);
     });
   }, [items, listRegionId, listPeriodo, listQuery, listActivo]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [listRegionId, listPeriodo, listQuery, listActivo]);
+
+  const listTotalPages = Math.max(1, Math.ceil(filteredItems.length / listPageSize));
+  const safePage = Math.min(listPage, listTotalPages);
+  const pagedItems = useMemo(() => {
+    const start = (safePage - 1) * listPageSize;
+    return filteredItems.slice(start, start + listPageSize);
+  }, [filteredItems, safePage]);
+  const pageStart = filteredItems.length ? (safePage - 1) * listPageSize + 1 : 0;
+  const pageEnd = filteredItems.length ? Math.min(safePage * listPageSize, filteredItems.length) : 0;
 
   const sugerencias = useMemo(() => {
     const q = normalizeText(listQuery);
@@ -469,10 +484,33 @@ export default function AdminTarifas({ token }) {
           )}
         </View>
 
+        <View style={styles.listTopBar}>
+          <Text style={styles.listCount}>
+            Mostrando {pageStart}-{pageEnd} de {filteredItems.length}
+          </Text>
+          <View style={styles.pageRow}>
+            <Pressable
+              style={[styles.pageBtn, safePage <= 1 && styles.pageBtnDisabled]}
+              onPress={() => safePage > 1 && setListPage(safePage - 1)}
+            >
+              <Text style={[styles.pageBtnText, safePage <= 1 && styles.pageBtnTextDisabled]}>Anterior</Text>
+            </Pressable>
+            <Text style={styles.pageIndicator}>Pagina {safePage} de {listTotalPages}</Text>
+            <Pressable
+              style={[styles.pageBtn, safePage >= listTotalPages && styles.pageBtnDisabled]}
+              onPress={() => safePage < listTotalPages && setListPage(safePage + 1)}
+            >
+              <Text style={[styles.pageBtnText, safePage >= listTotalPages && styles.pageBtnTextDisabled]}>
+                Siguiente
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
         {filteredItems.length === 0 ? (
           <Text style={styles.empty}>No hay tarifas.</Text>
         ) : (
-          filteredItems.map((t) => {
+          pagedItems.map((t) => {
             const regionLabel =
               regionNameById.get(Number(t.regionId ?? t.RegionId)) || String(t.regionId ?? t.RegionId);
             const activo = Boolean(t.activo ?? t.Activo);
@@ -611,6 +649,28 @@ const styles = StyleSheet.create({
     borderColor: "#BFD4FF",
   },
   suggestText: { fontWeight: "900", color: COLORS.blue2, fontSize: 12 },
+  listTopBar: {
+    marginBottom: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  listCount: { color: COLORS.muted, fontWeight: "800" },
+  pageRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  pageBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 8,
+    backgroundColor: "#EEF3FF",
+  },
+  pageBtnDisabled: { opacity: 0.45 },
+  pageBtnText: { color: COLORS.blue2, fontWeight: "900", fontSize: 12 },
+  pageBtnTextDisabled: { color: COLORS.muted },
+  pageIndicator: { color: COLORS.text, fontWeight: "800", fontSize: 12 },
   listCard: {
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
@@ -667,3 +727,4 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
+
