@@ -212,20 +212,36 @@ export default function useAuth() {
         },
         body: JSON.stringify({
           passwordActual: forceCurrent,
-          newPasswordNueva: forceNew,
+          PasswordNueva: forceNew, 
         }),
       });
+      
       if (!res.ok) {
         const txt = await res.text();
         throw new Error(txt || "No se pudo cambiar la contrasena.");
       }
 
-      setAuthToken(pendingToken);
+      // ---------------------------------------------------------
+      // 👇 AQUÍ ESTÁ LA MAGIA PARA ATRAPAR EL NUEVO TOKEN 👇
+      // ---------------------------------------------------------
+      
+      const data = await res.json();
+      const nuevoToken = data.token; 
+
+      if (!nuevoToken) {
+        throw new Error("El servidor no devolvió el nuevo token de acceso.");
+      }
+
+      // Usamos 'nuevoToken' en vez de 'pendingToken' para que 
+      // la sesión quede limpia y sin el "DebeCambiarContrasena: true"
+      setAuthToken(nuevoToken);
       setAuthEmail(pendingEmail);
       setAuthRole(pendingRole);
       setIsAuth(true);
-      const ts = saveSession(pendingToken);
+      
+      const ts = saveSession(nuevoToken); // Guardamos el nuevo
       scheduleAutoLogout(ts);
+      // ---------------------------------------------------------
 
       setForceChange(false);
       setPendingToken("");

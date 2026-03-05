@@ -7,6 +7,7 @@ import FormularioGasto from "./FormularioGasto";
 import CarpetaViajes from "./CarpetaViajes";
 import AsignacionSemanal from "./AsignacionSemanal";
 import TransferenciasSecretaria from "./TransferenciasSecretaria";
+import PanelAsignacionesSecretaria from "./PanelAsignacionesSecretaria";
 
 export default function SecretariaLayout({
   onLogout,
@@ -67,6 +68,11 @@ export default function SecretariaLayout({
             onPress={() => setActiveMenu("carpeta")}
           />
           <MenuItem
+            label="Lista Viajes"
+            active={activeMenu === "asignaciones"}
+            onPress={() => setActiveMenu("asignaciones")}
+          />
+          <MenuItem
             label="Saldos"
             active={activeMenu === "saldos"}
             onPress={() => setActiveMenu("saldos")}
@@ -84,7 +90,9 @@ export default function SecretariaLayout({
         </View>
 
         <View style={dash.content}>
-          {activeMenu === "carpeta" ? (
+          {activeMenu === "asignaciones" ? (  // <-- CORREGIDO: Ahora sí escucha a "Lista Viajes"
+            <PanelAsignacionesSecretaria token={authToken} />
+          ) : activeMenu === "carpeta" ? (    // <-- Esta es la de tu compa
             <CarpetaViajes token={authToken} viewMode="rendiciones" />
           ) : activeMenu === "saldos" ? (
             <CarpetaViajes token={authToken} viewMode="saldos" />

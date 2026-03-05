@@ -1,12 +1,16 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
+import StatusMessage from "../components/StatusMessage";
 import { isSaldoRendicionValida, normalizeText, resolveSaldoEstado, resolveTipoResultado } from "../utils/saldoUtils";
 import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
 import { obtenerSaldoMovimientos } from "../api/rendiciones";
+import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
 // Secretaria: rendiciones recibidas y envio a contadora.
 export default function CarpetaViajes({ token, viewMode = "all" }) {
@@ -20,6 +24,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [saldoFiltros, setSaldoFiltros] = useState({ tipo: "Todos", q: "" });
+  const saldoBusquedaDebounced = useDebouncedValue(saldoFiltros.q, 250);
   const [movimientosById, setMovimientosById] = useState({});
   const [movLoadingById, setMovLoadingById] = useState({});
   const [movErrorById, setMovErrorById] = useState({});
@@ -29,6 +34,11 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const [historyOpenByCap, setHistoryOpenByCap] = useState({});
   const [expandedCaps, setExpandedCaps] = useState({});
   const [visibleGroups, setVisibleGroups] = useState(6);
+  const [historialMes, setHistorialMes] = useState("todos");
+  const [sendingContadoraById, setSendingContadoraById] = useState({});
+  const [justifyingById, setJustifyingById] = useState({});
+  const [liftingById, setLiftingById] = useState({});
+  const [registrandoSaldoById, setRegistrandoSaldoById] = useState({});
 
   const totalAsignado = items.reduce((acc, it) => acc + Number(it.totalAsignado || 0), 0);
   const totalRendido = items.reduce((acc, it) => acc + Number(it.totalRendido || 0), 0);
@@ -42,61 +52,37 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     0
   );
 
-  const load = useCallback(async (page = itemsPage) => {
+  const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/secretaria/paged?page=${page}&pageSize=${itemsPageSize}`, {
+      const res = await fetch(`${API_BASE}/Rendiciones/secretaria`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        const fallback = await fetch(`${API_BASE}/Rendiciones/secretaria`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!fallback.ok) {
-          const txt = await fallback.text();
-          throw new Error(txt || "Error al cargar rendiciones");
-        }
-        const data = await fallback.json();
-        setItems(Array.isArray(data) ? data : []);
-        setItemsTotal(Array.isArray(data) ? data.length : 0);
-        setItemsPage(1);
-        setError("");
-        return;
-      }
+      if (!res.ok) throw new Error("Error al cargar rendiciones");
+      
       const data = await res.json();
-      setItems(Array.isArray(data?.items) ? data.items : []);
-      setItemsTotal(Number(data?.total || 0));
-      setItemsPage(Number(data?.page || page));
+      setItems(Array.isArray(data) ? data : []);
+      setItemsTotal(Array.isArray(data) ? data.length : 0);
+      setItemsPage(1);
       setError("");
     } catch (e) {
       setError(e?.message || "Error al cargar rendiciones");
     }
-  }, [token, itemsPage, itemsPageSize]);
+  }, [token]);
 
-  const loadSaldos = useCallback(async (page = saldosPage) => {
+  const loadSaldos = useCallback(async () => {
     try {
-      const res = await fetch(
-        `${API_BASE}/Rendiciones/saldos/paged?page=${page}&pageSize=${saldosPageSize}&incluirCerrados=true`,
-        {
+      const res = await fetch(`${API_BASE}/Rendiciones/saldos`, {
         headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!res.ok) {
-        const fallback = await fetch(`${API_BASE}/Rendiciones/saldos`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!fallback.ok) return;
-        const raw = await fallback.json();
-        setSaldos(Array.isArray(raw) ? raw : []);
-        setSaldosPage(1);
-        return;
-      }
+      });
+      if (!res.ok) throw new Error("Error al cargar saldos");
+
       const data = await res.json();
-      setSaldos(Array.isArray(data?.items) ? data.items : []);
-      setSaldosPage(Number(data?.page || page));
-    } catch {
+      setSaldos(Array.isArray(data) ? data : []);
+      setSaldosPage(1);
+    } catch (e) {
       setSaldos([]);
     }
-  }, [token, saldosPage, saldosPageSize]);
+  }, [token]);
 
   const loadJustificadas = useCallback(async () => {
     try {
@@ -127,7 +113,9 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   }, [load, loadSaldos, loadJustificadas]);
 
   const onEnviarContadora = async (id) => {
+    if (sendingContadoraById[id]) return;
     try {
+      setSendingContadoraById((prev) => ({ ...prev, [id]: true }));
       setInfo("");
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/enviar-contadora`, {
         method: "POST",
@@ -144,15 +132,19 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setInfo(e?.message || "No se pudo enviar.");
+    } finally {
+      setSendingContadoraById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onJustificar = async (id) => {
+    if (justifyingById[id]) return;
     const motivo = typeof window !== "undefined" ? (window.prompt("Motivo (ej: Licencia medica)", "Licencia medica") || "").trim() : "";
     if (!motivo) return;
     const fechaRaw = typeof window !== "undefined" ? window.prompt("Fecha hasta (YYYY-MM-DD, opcional)", "") || "" : "";
     const observacion = typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "") || "" : "";
     try {
+      setJustifyingById((prev) => ({ ...prev, [id]: true }));
       const payload = {
         motivo,
         observacion,
@@ -172,11 +164,15 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setInfo(e?.message || "No se pudo justificar.");
+    } finally {
+      setJustifyingById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onLevantarJustificacion = async (id) => {
+    if (liftingById[id]) return;
     try {
+      setLiftingById((prev) => ({ ...prev, [id]: true }));
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/levantar-justificacion`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -191,10 +187,13 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadJustificadas();
     } catch (e) {
       setInfo(e?.message || "No se pudo levantar justificacion.");
+    } finally {
+      setLiftingById((prev) => ({ ...prev, [id]: false }));
     }
   };
 
   const onRegistrarSaldo = async (r) => {
+    if (registrandoSaldoById[r.id]) return;
     const rawMonto =
       typeof window !== "undefined" ? window.prompt("Monto a registrar", String(r.saldoPendiente || "")) : "";
     const monto = Number(String(rawMonto || "").replace(/[^\d.,-]/g, "").replace(",", "."));
@@ -202,6 +201,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     const observacion =
       typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "Registro de saldo") || "" : "";
     try {
+      setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: true }));
       const res = await fetch(`${API_BASE}/Rendiciones/${r.id}/registrar-saldo`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -215,6 +215,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadSaldos(saldosPage);
     } catch (e) {
       setInfo(e?.message || "No se pudo registrar saldo.");
+    } finally {
+      setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: false }));
     }
   };
 
@@ -240,20 +242,24 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const itemsTotalPages = Math.max(1, Math.ceil(itemsTotal / itemsPageSize));
 
   const saldosFiltrados = useMemo(() => {
-    const q = normalizeText(saldoFiltros.q);
+    const q = normalizeText(saldoBusquedaDebounced);
     return (saldos || []).filter((r) => {
-      if (!isSaldoRendicionValida(r)) return false;
-      const tipo = resolveTipoResultado(r);
-      const estado = resolveSaldoEstado(r);
+      const tipo = r.tipoResultado || resolveTipoResultado(r);
+      // Usamos el estado real del backend
+      const estado = r.estado || resolveSaldoEstado(r); 
+
+      // 1. VOLVEMOS A PONER EL CANDADO: Si ya se pagó (Cerrado), no lo muestres aquí arriba
+      if (estado !== "Pendiente") return false;
+
       const searchable = normalizeText(
         `${r?.id || ""} ${r?.viaje?.capacitador || ""} ${r?.viaje?.municipio || ""} ${r?.viaje?.regionNombre || ""}`
       );
+      
       if (saldoFiltros.tipo !== "Todos" && tipo !== saldoFiltros.tipo) return false;
-      if (estado !== "Pendiente") return false;
       if (q && !searchable.includes(q)) return false;
       return true;
     });
-  }, [saldos, saldoFiltros]);
+  }, [saldos, saldoFiltros.tipo, saldoBusquedaDebounced]);
 
   const saldosPorCapacitador = useMemo(() => {
     const map = new Map();
@@ -277,27 +283,100 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     return { count, monto, montoFavor, montoContra };
   }, [saldosFiltrados]);
 
-  // Historial corto para secretaria: control de saldos ya cerrados.
-  const saldosCerradosRecientes = useMemo(() => {
+  const saldosCerrados = useMemo(() => {
     return (saldos || [])
-      .filter((r) => isSaldoRendicionValida(r) && resolveSaldoEstado(r) === "Cerrado")
+      .filter((r) => {
+        // Usamos el estado real del backend
+        const estado = r.estado || resolveSaldoEstado(r);
+        // 2. EL NUEVO CANDADO: Solo mostramos los que digan Cerrado o Saldada
+        return estado === "Cerrado" || estado === "Saldada";
+      })
       .sort((a, b) => {
         const fa = new Date(a?.saldoCerradoEn || a?.fechaEnvio || 0).getTime();
         const fb = new Date(b?.saldoCerradoEn || b?.fechaEnvio || 0).getTime();
         return fb - fa;
-      })
-      .slice(0, 8);
+      });
   }, [saldos]);
+
+  const historialMesOptions = useMemo(() => {
+    const unique = new Map();
+    saldosCerrados.forEach((r) => {
+      const key = resolveMonthKey(r?.saldoCerradoEn || r?.fechaEnvio);
+      if (!key) return;
+      unique.set(key, resolveMonthLabel(key));
+    });
+    return [{ value: "todos", label: "Todos los meses" }].concat(
+      Array.from(unique.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([value, label]) => ({ value, label }))
+    );
+  }, [saldosCerrados]);
+
+  const saldosCerradosFiltrados = useMemo(() => {
+    if (historialMes === "todos") return saldosCerrados;
+    return saldosCerrados.filter((r) => resolveMonthKey(r?.saldoCerradoEn || r?.fechaEnvio) === historialMes);
+  }, [saldosCerrados, historialMes]);
 
   const historialPorCapacitador = useMemo(() => {
     const map = new Map();
-    saldosCerradosRecientes.forEach((r) => {
+    saldosCerradosFiltrados.forEach((r) => {
       const cap = r?.viaje?.capacitador || "Sin nombre";
       if (!map.has(cap)) map.set(cap, []);
       map.get(cap).push(r);
     });
     return Array.from(map.entries()).map(([capacitador, rows]) => ({ capacitador, rows }));
-  }, [saldosCerradosRecientes]);
+  }, [saldosCerradosFiltrados]);
+
+  const exportSummary = useMemo(() => {
+    const total = saldosCerradosFiltrados.length;
+    const favor = saldosCerradosFiltrados
+      .filter((r) => resolveTipoResultado(r) === "Reembolso")
+      .reduce((acc, r) => acc + resolveMontoSaldo(r), 0);
+    const contra = saldosCerradosFiltrados
+      .filter((r) => resolveTipoResultado(r) === "Devolucion")
+      .reduce((acc, r) => acc + resolveMontoSaldo(r), 0);
+    return { total, favor, contra };
+  }, [saldosCerradosFiltrados]);
+
+  const onExportHistorial = useCallback(
+    (type) => {
+      const rows = saldosCerradosFiltrados.map((r) => {
+        const tipo = resolveTipoResultado(r);
+        return [
+          { value: formatFechaCorta(r?.saldoCerradoEn || r?.fechaEnvio) },
+          { value: r.id },
+          { value: r?.viaje?.capacitador || "-" },
+          { value: r?.viaje?.municipio || "-" },
+          { value: r?.viaje?.regionNombre || "-" },
+          { value: tipo },
+          { value: `$ ${resolveMontoSaldo(r).toLocaleString("es-CL")}`, align: "right" },
+          { value: resolveSaldoEstado(r) },
+        ];
+      });
+      const mesLabel = historialMes === "todos" ? "Todos los meses" : resolveMonthLabel(historialMes);
+      const config = {
+        title: "Historial de saldos cerrados",
+        subtitle: "Secretaria - Rendiciones",
+        meta: [
+          { label: "Fecha de generacion", value: new Date().toLocaleString("es-CL") },
+          { label: "Mes", value: mesLabel },
+        ],
+        summary: [
+          { label: "Registros", value: exportSummary.total },
+          { label: "A favor", value: `$ ${exportSummary.favor.toLocaleString("es-CL")}` },
+          { label: "En contra", value: `$ ${exportSummary.contra.toLocaleString("es-CL")}` },
+        ],
+        headers: ["Fecha cierre", "Rendicion", "Capacitador", "Destino", "Region", "Tipo", "Monto", "Estado"],
+        rows,
+      };
+      const ok =
+        type === "excel"
+          ? exportReportExcel({ fileName: "historial_saldos_secretaria.xls", ...config })
+          : exportReportPdf({ fileName: "historial_saldos_secretaria.pdf", ...config });
+      if (!ok) Alert.alert("Exportar", "La exportacion solo esta habilitada en web.");
+    },
+    [saldosCerradosFiltrados, historialMes, exportSummary]
+  );
 
   const pendientesAgrupados = useMemo(() => groupRendicionesByCapacitador(items), [items]);
 
@@ -359,8 +438,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       {viewMode !== "saldos" ? (
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Pendientes de revision</Text>
-        {!!error && <Text style={{ color: "#6B7280", fontWeight: "700" }}>{error}</Text>}
-        {!!info && <Text style={{ color: "#6B7280", fontWeight: "700" }}>{info}</Text>}
+        <StatusMessage tone="error" text={error} />
+        <StatusMessage tone="info" text={info} />
 
         {pendientesAgrupados.length === 0 ? (
           <Text style={{ color: "#6B7280", fontWeight: "700", marginTop: 8 }}>
@@ -395,6 +474,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                         data={item}
                         onEnviar={() => onEnviarContadora(item.id)}
                         onJustificar={() => onJustificar(item.id)}
+                        sending={!!sendingContadoraById[item.id]}
+                        justifying={!!justifyingById[item.id]}
                       />
                     ))
                   : null}
@@ -449,8 +530,11 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                   <Pressable
                     style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
                     onPress={() => onLevantarJustificacion(r.id)}
+                    disabled={!!liftingById[r.id]}
                   >
-                    <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Levantar justificacion</Text>
+                    <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>
+                      {liftingById[r.id] ? "Levantando..." : "Levantar justificacion"}
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -462,6 +546,20 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       {viewMode !== "rendiciones" ? (
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Reembolsos y devoluciones pendientes</Text>
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8, marginBottom: 8 }}>
+          <View style={summaryCardStyle}>
+            <Text style={summaryLabelStyle}>Pendientes</Text>
+            <Text style={summaryValueStyle}>{resumenSaldosPendientes.count}</Text>
+          </View>
+          <View style={summaryCardStyle}>
+            <Text style={summaryLabelStyle}>A favor</Text>
+            <Text style={summaryValueStyle}>$ {resumenSaldosPendientes.montoFavor.toLocaleString("es-CL")}</Text>
+          </View>
+          <View style={summaryCardStyle}>
+            <Text style={summaryLabelStyle}>En contra</Text>
+            <Text style={summaryValueStyle}>$ {resumenSaldosPendientes.montoContra.toLocaleString("es-CL")}</Text>
+          </View>
+        </View>
         <Text style={dash.docSub}>
           Pendientes: {resumenSaldosPendientes.count} | Monto pendiente: ${" "}
           {resumenSaldosPendientes.monto.toLocaleString("es-CL")}
@@ -519,7 +617,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
               </Pressable>
               {saldoOpenByCap[grupo.capacitador]
                 ? grupo.rows.map((r) => {
-                    const saldoEstado = resolveSaldoEstado(r);
+                    const saldoEstado = r.estado || resolveSaldoEstado(r);
                     const saldoPendiente = Number(r.saldoPendiente || 0);
                     const canRegistrar = saldoEstado === "Pendiente" && saldoPendiente > 0;
                     return (
@@ -533,9 +631,17 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                           </View>
                           <View style={{ gap: 8 }}>
                             {canRegistrar ? (
-                              <Pressable style={[dash.docBtn, { backgroundColor: "#1D4ED8" }]} onPress={() => onRegistrarSaldo(r)}>
+                              <Pressable
+                                style={[dash.docBtn, { backgroundColor: "#1D4ED8", opacity: registrandoSaldoById[r.id] ? 0.7 : 1 }]}
+                                onPress={() => onRegistrarSaldo(r)}
+                                disabled={!!registrandoSaldoById[r.id]}
+                              >
                                 <Text style={dash.docBtnText}>
-                                  {resolveTipoResultado(r) === "Reembolso" ? "Registrar pago" : "Registrar devolucion"}
+                                  {registrandoSaldoById[r.id]
+                                    ? "Registrando..."
+                                    : resolveTipoResultado(r) === "Reembolso"
+                                      ? "Registrar pago"
+                                      : "Registrar devolucion"}
                                 </Text>
                               </Pressable>
                             ) : (
@@ -582,7 +688,37 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       {viewMode !== "rendiciones" ? (
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Historial reciente de saldos cerrados</Text>
-        {saldosCerradosRecientes.length === 0 ? (
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <View
+            style={{
+              minWidth: 240,
+              borderWidth: 1,
+              borderColor: "#D9E5FF",
+              borderRadius: 10,
+              overflow: "hidden",
+              backgroundColor: "#fff",
+            }}
+          >
+            <Picker selectedValue={historialMes} onValueChange={setHistorialMes} style={{ height: 38 }}>
+              {historialMesOptions.map((opt) => (
+                <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+              ))}
+            </Picker>
+          </View>
+          <Pressable
+            style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
+            onPress={() => onExportHistorial("excel")}
+          >
+            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Descargar Excel</Text>
+          </Pressable>
+          <Pressable
+            style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
+            onPress={() => onExportHistorial("pdf")}
+          >
+            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Descargar PDF</Text>
+          </Pressable>
+        </View>
+        {saldosCerradosFiltrados.length === 0 ? (
           <Text style={{ color: "#6B7280", fontWeight: "700", marginTop: 8 }}>Aun no hay cierres registrados.</Text>
         ) : (
           historialPorCapacitador.map((grupo) => (
@@ -649,7 +785,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   );
 }
 
-function ViajeRowCard({ data, onEnviar, onJustificar }) {
+function ViajeRowCard({ data, onEnviar, onJustificar, sending = false, justifying = false }) {
   const onDownload = () => {
     Alert.alert("Adjuntos", "Los adjuntos se validan en backend. Descarga sera agregada luego.");
   };
@@ -684,14 +820,25 @@ function ViajeRowCard({ data, onEnviar, onJustificar }) {
         <Text style={[dash.docSub, { color: "#1D4ED8", fontWeight: "800" }]}>{guidance.prompt}</Text>
       </View>
       <View style={{ gap: 8 }}>
-        <Pressable style={[dash.docBtn, { backgroundColor: "#1D4ED8" }]} onPress={onEnviar}>
-          <Text style={dash.docBtnText}>Enviar a contadora</Text>
+        <Pressable
+          style={[dash.docBtn, { backgroundColor: "#1D4ED8", opacity: sending ? 0.7 : 1 }]}
+          onPress={onEnviar}
+          disabled={sending}
+        >
+          <Text style={dash.docBtnText}>{sending ? "Enviando..." : "Enviar a contadora"}</Text>
         </Pressable>
         <Pressable style={dash.docBtn} onPress={onDownload}>
           <Text style={dash.docBtnText}>Ver adjuntos</Text>
         </Pressable>
-        <Pressable style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]} onPress={onJustificar}>
-          <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Justificar</Text>
+        <Pressable
+          style={[
+            dash.docBtn,
+            { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF", opacity: justifying ? 0.7 : 1 },
+          ]}
+          onPress={onJustificar}
+          disabled={justifying}
+        >
+          <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>{justifying ? "Justificando..." : "Justificar"}</Text>
         </Pressable>
       </View>
     </View>
@@ -797,4 +944,45 @@ function resolveMontoSaldo(item) {
   if (pendiente > 0) return pendiente;
   return Math.abs(dif);
 }
+
+function resolveMonthKey(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function resolveMonthLabel(key) {
+  if (!key || !key.includes("-")) return "Sin mes";
+  const [year, month] = key.split("-");
+  const d = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(d.getTime())) return key;
+  return d.toLocaleDateString("es-CL", { month: "long", year: "numeric" });
+}
+
+const summaryCardStyle = {
+  flex: 1,
+  minWidth: 150,
+  borderWidth: 1,
+  borderColor: "#D9E5FF",
+  borderRadius: 10,
+  backgroundColor: "#F8FAFF",
+  paddingVertical: 8,
+  paddingHorizontal: 10,
+};
+
+const summaryLabelStyle = {
+  color: "#6B7280",
+  fontWeight: "800",
+  fontSize: 12,
+  marginBottom: 3,
+};
+
+const summaryValueStyle = {
+  color: "#111827",
+  fontWeight: "900",
+  fontSize: 16,
+};
+
+
 

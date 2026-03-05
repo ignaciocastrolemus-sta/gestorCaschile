@@ -6,6 +6,7 @@ import Topbar from "../components/Topbar";
 import { Card, Col, Input, Label, Row, SectionTitle, Select } from "../components/UI";
 import AsignacionSemanal from "./AsignacionSemanal";
 import TransferenciasSecretaria from "./TransferenciasSecretaria";
+import PanelAsignacionesSecretaria from "./PanelAsignacionesSecretaria";
 
 // Secretaria: ingreso de gastos y documentos recibidos
 export default function SecretariaHome({ onLogout, token, embedded = false }) {
@@ -90,6 +91,8 @@ export default function SecretariaHome({ onLogout, token, embedded = false }) {
         <AsignacionSemanal token={token} />
       ) : active === "transfer" ? (
         <TransferenciasSecretaria token={token} />
+        ) : active === "viajes" ? (
+        <PanelAsignacionesSecretaria token={token} />
       ) : active === "docs" ? (
         <View style={styles.card}>
           <Text style={styles.title}>Documentos recibidos</Text>

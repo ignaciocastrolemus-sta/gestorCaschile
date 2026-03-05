@@ -810,19 +810,37 @@ function quickFilterText(active) {
 
 function formatRango(inicio, termino) {
   if (!inicio || !termino) return "";
-  const start = new Date(inicio);
-  const end = new Date(termino);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
-  const fmt = (d) =>
-    String(d.getDate()).padStart(2, "0") +
-    "/" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "/" +
-    d.getFullYear();
-  return `${fmt(start)} - ${fmt(end)}`;
+
+  const formatearSeguro = (fechaStr) => {
+    if (!fechaStr) return "";
+    // Cortamos la hora si viene (ej: "2026-03-05T00:00:00" -> "2026-03-05")
+    const soloFecha = String(fechaStr).split("T")[0]; 
+    const partes = soloFecha.split("-");
+    
+    // Si logramos separar el Año, Mes y Día, lo armamos a mano (evita el bug de zona horaria)
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    
+    // Fallback por si acaso
+    const d = new Date(fechaStr);
+    if (Number.isNaN(d.getTime())) return "-";
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  };
+
+  return `${formatearSeguro(inicio)} - ${formatearSeguro(termino)}`;
 }
 
 function formatFechaCorta(value) {
+  if (!value) return "-";
+  
+  const soloFecha = String(value).split("T")[0];
+  const partes = soloFecha.split("-");
+  
+  if (partes.length === 3) {
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  }
+
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;

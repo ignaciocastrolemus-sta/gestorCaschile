@@ -1,6 +1,6 @@
 ﻿import { API_BASE } from "../config/api";
 // Endpoint base: ViajesGastos
-const API_URL = `${API_BASE}/ViajesGastos`;
+const API_URL = `${API_BASE}/AsignacionViajes`;
 
 // Convierte DD/MM/AAAA a YYYY-MM-DD (para backend)
 function toIsoDate(fechaDDMMYYYY) {
@@ -24,9 +24,22 @@ function normalizeViajePayload(viaje) {
 }
 
 // LISTAR viajes
-export async function listarViajes() {
-  const res = await fetch(API_URL);
-  if (!res.ok) throw new Error("Error al listar viajes");
+export async function listarViajes(token) {
+  // Verificamos si llega el token por consola para debuggear (borrar después)
+  console.log("Token enviado al API:", token ? "Recibido" : "FALTANTE");
+
+  const res = await fetch(`${API_BASE}/AsignacionViajes`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`, // <-- Vital: Espacio después de Bearer
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Error ${res.status}: ${errorText}`);
+  }
   return await res.json();
 }
 

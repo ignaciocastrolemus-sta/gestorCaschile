@@ -47,14 +47,23 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
     const rawData = await res.json();
     const arrayData = Array.isArray(rawData) ? rawData : (rawData?.data || []);
 
+    //Pequeña funcion para parsear la fecha y se muestre correctamente en el frontend
+    const formatearFechaLocal = (fechaString) => {
+    if (!fechaString) return "";
+    const soloFecha = fechaString.split("T")[0]; 
+    const [anio, mes, dia] = soloFecha.split("-");
+    return `${dia}/${mes}/${anio}`; 
+  };
+
+
     // LA ADUANA: Convertimos los nombres de C# (PascalCase) a los de JS (camelCase)
     return arrayData.map((v) => ({
       ...v, // Mantiene los datos originales por si acaso
       id: v.id || v.IdAsignacionViaje || v.idAsignacionViaje,
       estado: v.estado || v.Estado || "Pendiente",
-      municipio: v.municipio || v.comuna || v.CodigoOt || "Viaje sin destino",
-      fechaInicio: v.fechaInicio || v.FechaInicio,
-      fechaTermino: v.fechaTermino || v.FechaTermino,
+      municipio: v.nombreComuna ? `${v.nombreComuna} - ${v.razonSocialCliente}` : (v.CodigoOt || "Viaje sin destino"),
+      fechaInicio: formatearFechaLocal(v.fechaInicio || v.FechaInicio),
+      fechaTermino: formatearFechaLocal(v.fechaTermino || v.FechaTermino),
       
       // Normalizamos las columnas rendibles
       montoBus: Number(v.montoBus ?? v.MontoBus ?? 0),
@@ -657,16 +666,21 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
 
 function formatRango(inicio, termino) {
   if (!inicio || !termino) return "";
-  const start = new Date(inicio);
-  const end = new Date(termino);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
-  const fmt = (d) =>
-    String(d.getDate()).padStart(2, "0") +
-    "/" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "/" +
-    d.getFullYear();
-  return `${fmt(start)} - ${fmt(end)}`;
+
+  const formatearSeguro = (fechaStr) => {
+    if (!fechaStr) return "";
+    const soloFecha = String(fechaStr).split("T")[0]; 
+    const partes = soloFecha.split("-");
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    // Fallback
+    const d = new Date(fechaStr);
+    if (Number.isNaN(d.getTime())) return "-";
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  };
+
+  return `${formatearSeguro(inicio)} - ${formatearSeguro(termino)}`;
 }
 
 function parseDateInput(value) {

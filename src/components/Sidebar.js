@@ -27,6 +27,7 @@ export default function Sidebar({ activeKey, active, onChange }) {
       <Item k="santiago" label="Ingresar gasto Santiago" />
       <Item k="regiones" label="Ingresar gasto Regiones" />
       <Item k="semanal" label="Asignaciones clientes" />
+      <Item k="viajes" label="Lista de Viajes" />
       <Item k="transfer" label="Transferencias" />
       <Item k="docs" label="Documentos recibidos" />
 
