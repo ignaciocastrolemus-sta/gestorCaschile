@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, Modal, ScrollView } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -8,6 +8,8 @@ import CarpetaViajes from "./CarpetaViajes";
 import AsignacionSemanal from "./AsignacionSemanal";
 import TransferenciasSecretaria from "./TransferenciasSecretaria";
 import EncuadreRendiciones from "./EncuadreRendiciones";
+import { API_BASE } from "../config/api";
+import { getRecentVisibleNotificationCount, getVisibleNotifications } from "../utils/notificationUtils";
 
 export default function SecretariaLayout({
   onLogout,
@@ -25,12 +27,47 @@ export default function SecretariaLayout({
   onChangeTipoViaje,
   saveMsg,
 }) {
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [showNotiModal, setShowNotiModal] = useState(false);
+
+  const loadNotificaciones = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/Rendiciones/saldos/notificaciones?top=20`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) {
+        setNotificaciones([]);
+        return;
+      }
+      const data = await res.json();
+      setNotificaciones(Array.isArray(data) ? data : []);
+    } catch {
+      setNotificaciones([]);
+    }
+  }, [authToken]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    loadNotificaciones();
+    const timer = setInterval(loadNotificaciones, 45000);
+    return () => clearInterval(timer);
+  }, [authToken, loadNotificaciones]);
+
+  const visibleNotificaciones = useMemo(() => getVisibleNotifications(notificaciones), [notificaciones]);
+  const badgeCount = useMemo(
+    () => getRecentVisibleNotificationCount(notificaciones, 3),
+    [notificaciones]
+  );
+
   return (
     <View style={dash.root}>
       <View style={dash.topbar}>
         <Text style={dash.brand}>Gestor CAS Chile</Text>
 
         <View style={dash.topActions}>
+          <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
+            <Text style={dash.topBtnText}>{badgeCount > 0 ? `Notificaciones (${badgeCount})` : "Notificaciones"}</Text>
+          </Pressable>
           <Pressable style={dash.topBtn}>
             <Text style={dash.topBtnText}>Inicio</Text>
           </Pressable>
@@ -63,7 +100,7 @@ export default function SecretariaLayout({
             onPress={() => setActiveMenu("gasto")}
           />
           <MenuItem
-            label="Carpeta de viajes"
+            label={badgeCount > 0 ? `Carpeta de viajes (${badgeCount})` : "Carpeta de viajes"}
             active={activeMenu === "carpeta"}
             onPress={() => setActiveMenu("carpeta")}
           />
@@ -117,6 +154,49 @@ export default function SecretariaLayout({
           )}
         </View>
       </View>
+
+      <Modal transparent visible={showNotiModal} animationType="fade" onRequestClose={() => setShowNotiModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.25)", justifyContent: "center", alignItems: "center", padding: 16 }}>
+          <View style={{ width: "100%", maxWidth: 760, maxHeight: "80%", backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#D9E5FF", padding: 14 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Text style={{ color: COLORS.text, fontWeight: "900", fontSize: 18 }}>Notificaciones</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable style={dash.docBtn} onPress={loadNotificaciones}>
+                  <Text style={dash.docBtnText}>Actualizar</Text>
+                </Pressable>
+                <Pressable style={dash.docBtn} onPress={() => setShowNotiModal(false)}>
+                  <Text style={dash.docBtnText}>Cerrar</Text>
+                </Pressable>
+              </View>
+            </View>
+            <ScrollView>
+              {visibleNotificaciones.length === 0 ? (
+                <Text style={{ color: COLORS.muted, fontWeight: "700" }}>Sin notificaciones.</Text>
+              ) : (
+                visibleNotificaciones.map((n) => (
+                  <View key={String(n.id)} style={{ borderTopWidth: 1, borderTopColor: "#E5E7EB", paddingTop: 8, marginTop: 8 }}>
+                    <Text style={{ color: COLORS.text, fontWeight: "900" }}>{n.titulo || "Notificacion"}</Text>
+                    <Text style={{ color: COLORS.muted, fontWeight: "700", fontSize: 12 }}>
+                      {n?.fechaRegistro ? new Date(n.fechaRegistro).toLocaleString("es-CL") : "-"}
+                      {n?.rendicionId ? ` | Rendicion #${n.rendicionId}` : ""}
+                    </Text>
+                    {!!n?.mensaje ? <Text style={{ color: COLORS.muted, fontWeight: "700", fontSize: 12 }}>{n.mensaje}</Text> : null}
+                    <Pressable
+                      style={[dash.docBtn, { marginTop: 6 }]}
+                      onPress={() => {
+                        setShowNotiModal(false);
+                        setActiveMenu("carpeta");
+                      }}
+                    >
+                      <Text style={dash.docBtnText}>Ir a carpeta de viajes</Text>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

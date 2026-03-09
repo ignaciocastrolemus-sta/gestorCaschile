@@ -11,6 +11,7 @@ import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
 import { obtenerSaldoMovimientos } from "../api/rendiciones";
 import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
 import useDebouncedValue from "../hooks/useDebouncedValue";
+import { getVisibleNotifications } from "../utils/notificationUtils";
 
 // Contadora: lista de rendiciones y resolucion (aprobar/rechazar)
 export default function ContadoraRendiciones({ token, viewMode = "all" }) {
@@ -30,6 +31,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [movLoadingById, setMovLoadingById] = useState({});
   const [movErrorById, setMovErrorById] = useState({});
   const [movOpenById, setMovOpenById] = useState({});
+  const [revirtiendoByMovId, setRevirtiendoByMovId] = useState({});
   const [justificadas, setJustificadas] = useState([]);
   const [saldoOpenByCap, setSaldoOpenByCap] = useState({});
   const [historyOpenByCap, setHistoryOpenByCap] = useState({});
@@ -40,6 +42,9 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [justificandoById, setJustificandoById] = useState({});
   const [levantandoById, setLevantandoById] = useState({});
   const [registrandoSaldoById, setRegistrandoSaldoById] = useState({});
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [showNotificaciones, setShowNotificaciones] = useState(false);
+  const visibleNotificaciones = useMemo(() => getVisibleNotifications(notificaciones), [notificaciones]);
 
   // Resumen rapido para priorizar revision.
   const kpis = useMemo(() => {
@@ -138,17 +143,35 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     }
   }, [token]);
 
+  const loadNotificaciones = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/Rendiciones/saldos/notificaciones?top=10`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setNotificaciones([]);
+        return;
+      }
+      const data = await res.json();
+      setNotificaciones(Array.isArray(data) ? data : []);
+    } catch {
+      setNotificaciones([]);
+    }
+  }, [token]);
+
   useEffect(() => {
     load(1);
     loadSaldos(1);
     loadJustificadas();
-  }, [load, loadSaldos, loadJustificadas]);
+    loadNotificaciones();
+  }, [load, loadSaldos, loadJustificadas, loadNotificaciones]);
 
   const onActualizar = useCallback(() => {
     load(1);
     loadSaldos(1);
     loadJustificadas();
-  }, [load, loadSaldos, loadJustificadas]);
+    loadNotificaciones();
+  }, [load, loadSaldos, loadJustificadas, loadNotificaciones]);
 
   const onDownload = async (adjuntoId, filename) => {
     try {
@@ -283,13 +306,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     }
   };
 
-  const onToggleMovimientos = async (rendicionId) => {
-    const isOpen = !!movOpenById[rendicionId];
-    if (isOpen) {
-      setMovOpenById((prev) => ({ ...prev, [rendicionId]: false }));
-      return;
-    }
-    setMovOpenById((prev) => ({ ...prev, [rendicionId]: true }));
+  const loadMovimientos = async (rendicionId) => {
     try {
       setMovLoadingById((prev) => ({ ...prev, [rendicionId]: true }));
       setMovErrorById((prev) => ({ ...prev, [rendicionId]: "" }));
@@ -299,6 +316,41 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       setMovErrorById((prev) => ({ ...prev, [rendicionId]: e?.message || "No se pudo cargar historial." }));
     } finally {
       setMovLoadingById((prev) => ({ ...prev, [rendicionId]: false }));
+    }
+  };
+
+  const onToggleMovimientos = async (rendicionId) => {
+    const isOpen = !!movOpenById[rendicionId];
+    if (isOpen) {
+      setMovOpenById((prev) => ({ ...prev, [rendicionId]: false }));
+      return;
+    }
+    setMovOpenById((prev) => ({ ...prev, [rendicionId]: true }));
+    await loadMovimientos(rendicionId);
+  };
+
+  const onRevertirMovimiento = async (rendicionId, movimiento) => {
+    if (!movimiento?.id || revirtiendoByMovId[movimiento.id]) return;
+    const motivo = typeof window !== "undefined" ? window.prompt("Motivo de reversa (obligatorio)", "") || "" : "";
+    if (!motivo.trim()) return;
+    try {
+      setRevirtiendoByMovId((prev) => ({ ...prev, [movimiento.id]: true }));
+      const res = await fetch(`${API_BASE}/Rendiciones/${rendicionId}/revertir-saldo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ movimientoId: movimiento.id, motivo }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "No se pudo revertir.");
+      }
+      setActionMsg("Movimiento revertido correctamente.");
+      await loadSaldos(saldosPage);
+      await loadMovimientos(rendicionId);
+    } catch (e) {
+      setActionMsg(e?.message || "No se pudo revertir.");
+    } finally {
+      setRevirtiendoByMovId((prev) => ({ ...prev, [movimiento.id]: false }));
     }
   };
 
@@ -506,6 +558,32 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       <StatusMessage tone="error" text={error} />
       <StatusMessage tone="info" text={actionMsg} />
 
+      <View style={styles.card}>
+        <View style={styles.actionsRow}>
+          <Text style={styles.sectionTitle}>Notificaciones</Text>
+          <Pressable style={styles.historyBtn} onPress={() => setShowNotificaciones((v) => !v)}>
+            <Text style={styles.historyBtnText}>{showNotificaciones ? "Ocultar" : "Mostrar"}</Text>
+          </Pressable>
+        </View>
+        {!showNotificaciones ? (
+          <Text style={styles.detailHint}>Panel contraido.</Text>
+        ) : visibleNotificaciones.length === 0 ? (
+          <Text style={styles.detailHint}>Sin notificaciones.</Text>
+        ) : (
+          visibleNotificaciones.map((n) => (
+            <View key={`noti-${n.id}`} style={styles.movementsWrap}>
+              <Text style={styles.line}>{n.titulo || "Notificacion"}</Text>
+              <Text style={styles.detailHint}>
+                {formatFechaCorta(n.fechaRegistro)}
+                {n.rendicionId ? ` | Rendicion #${n.rendicionId}` : ""}
+                {typeof n.monto === "number" ? ` | $ ${Number(n.monto || 0).toLocaleString("es-CL")}` : ""}
+              </Text>
+              {!!n.mensaje ? <Text style={styles.detailHint}>{n.mensaje}</Text> : null}
+            </View>
+          ))
+        )}
+      </View>
+
       {viewMode !== "rendiciones" ? (
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Reembolsos y devoluciones pendientes</Text>
@@ -578,8 +656,11 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
               {saldoOpenByCap[grupo.capacitador]
                 ? grupo.rows.map((r) => {
                     const saldoEstado = resolveSaldoEstado(r);
+                    const saldoEstadoRaw = normalizeText(r?.saldoEstado || "");
                     const saldoPendiente = Number(r.saldoPendiente || 0);
                     const canRegistrar = saldoEstado === "Pendiente" && saldoPendiente > 0;
+                    const devolucionReportada =
+                      saldoEstadoRaw === "devolucionreportadacapacitador" && resolveTipoResultado(r) === "Devolucion";
                     return (
                       <View key={`saldo-${r.id}`} style={styles.saldoItemCard}>
                         <View style={styles.saldoItemHeader}>
@@ -617,7 +698,9 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                                     ? "Registrando..."
                                     : resolveTipoResultado(r) === "Reembolso"
                                       ? "Registrar pago"
-                                      : "Registrar devolucion"}
+                                      : devolucionReportada
+                                        ? "Confirmar devolucion"
+                                        : "Registrar devolucion"}
                                 </Text>
                               </Pressable>
                             ) : (
@@ -637,12 +720,25 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                             {!movLoadingById[r.id] && !movErrorById[r.id] && !(movimientosById[r.id] || []).length ? (
                               <Text style={styles.detailHint}>Sin movimientos registrados.</Text>
                             ) : null}
-                            {(movimientosById[r.id] || []).map((m) => (
-                              <Text key={`mov-${r.id}-${m.id}`} style={styles.detailHint}>
-                                {formatFechaCorta(m.fechaRegistro)} | {m.tipoOperacion} | $ {Number(m.monto || 0).toLocaleString("es-CL")} |{" "}
-                                {Number(m.saldoAnterior || 0).toLocaleString("es-CL")} {"->"}{" "}
-                                {Number(m.saldoPosterior || 0).toLocaleString("es-CL")}
-                              </Text>
+                            {(movimientosById[r.id] || []).map((m, idx) => (
+                              <View key={`mov-${r.id}-${m.id}`} style={styles.movRow}>
+                                <Text style={[styles.detailHint, { flex: 1 }]}>
+                                  {formatFechaCorta(m.fechaRegistro)} | {m.tipoOperacion} | $ {Number(m.monto || 0).toLocaleString("es-CL")} |{" "}
+                                  {Number(m.saldoAnterior || 0).toLocaleString("es-CL")} {"->"}{" "}
+                                  {Number(m.saldoPosterior || 0).toLocaleString("es-CL")}
+                                </Text>
+                                {idx === 0 && !normalizeText(m.tipoOperacion).includes("reversa") ? (
+                                  <Pressable
+                                    style={[styles.historyBtn, revirtiendoByMovId[m.id] && { opacity: 0.7 }]}
+                                    onPress={() => onRevertirMovimiento(r.id, m)}
+                                    disabled={!!revirtiendoByMovId[m.id]}
+                                  >
+                                    <Text style={styles.historyBtnText}>
+                                      {revirtiendoByMovId[m.id] ? "Revirtiendo..." : "Revertir"}
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
+                              </View>
                             ))}
                           </View>
                         ) : null}
@@ -755,12 +851,25 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                             {!movLoadingById[r.id] && !movErrorById[r.id] && !(movimientosById[r.id] || []).length ? (
                               <Text style={styles.detailHint}>Sin movimientos registrados.</Text>
                             ) : null}
-                            {(movimientosById[r.id] || []).map((m) => (
-                              <Text key={`mov-h-${r.id}-${m.id}`} style={styles.detailHint}>
-                                {formatFechaCorta(m.fechaRegistro)} | {m.tipoOperacion} | $ {Number(m.monto || 0).toLocaleString("es-CL")} |{" "}
-                                {Number(m.saldoAnterior || 0).toLocaleString("es-CL")} {"->"}{" "}
-                                {Number(m.saldoPosterior || 0).toLocaleString("es-CL")}
-                              </Text>
+                            {(movimientosById[r.id] || []).map((m, idx) => (
+                              <View key={`mov-h-${r.id}-${m.id}`} style={styles.movRow}>
+                                <Text style={[styles.detailHint, { flex: 1 }]}>
+                                  {formatFechaCorta(m.fechaRegistro)} | {m.tipoOperacion} | $ {Number(m.monto || 0).toLocaleString("es-CL")} |{" "}
+                                  {Number(m.saldoAnterior || 0).toLocaleString("es-CL")} {"->"}{" "}
+                                  {Number(m.saldoPosterior || 0).toLocaleString("es-CL")}
+                                </Text>
+                                {idx === 0 && !normalizeText(m.tipoOperacion).includes("reversa") ? (
+                                  <Pressable
+                                    style={[styles.historyBtn, revirtiendoByMovId[m.id] && { opacity: 0.7 }]}
+                                    onPress={() => onRevertirMovimiento(r.id, m)}
+                                    disabled={!!revirtiendoByMovId[m.id]}
+                                  >
+                                    <Text style={styles.historyBtnText}>
+                                      {revirtiendoByMovId[m.id] ? "Revirtiendo..." : "Revertir"}
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
+                              </View>
                             ))}
                           </View>
                         ) : null}
@@ -1190,6 +1299,12 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.grayBorder,
     paddingTop: 8,
     width: "100%",
+  },
+  movRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
   },
   historyBtn: {
     height: 36,
