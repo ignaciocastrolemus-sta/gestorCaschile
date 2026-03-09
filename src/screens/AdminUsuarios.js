@@ -16,8 +16,10 @@ export default function AdminUsuarios({ token, title }) {
     Administrador: { hint: "Acceso total", color: "#1E5AC8" },
     Secretaria: { hint: "Gestiona asignaciones", color: "#E2871B" },
     Contadora: { hint: "Aprueba rendiciones", color: "#198754" },
+    Capacitador: { hint: "Ingresa gastos", color: "#5F6B7A" },
     "Usuario Terreno": { hint: "Ingresa gastos", color: "#5F6B7A" },
   };
+  const roleDisplayName = (roleName) => (roleName === "Usuario Terreno" ? "Capacitador" : roleName || "Sin rol");
   const BANCOS_CHILE = [
     "Banco de Chile",
     "BancoEstado",
@@ -86,6 +88,7 @@ export default function AdminUsuarios({ token, title }) {
     () => roleItems.find((it) => Number(it.value) === Number(form.rolId || roleItems[0]?.value))?.label || "",
     [roleItems, form.rolId]
   );
+  const selectedRoleDisplay = roleDisplayName(selectedRole);
   const usuariosFiltrados = useMemo(() => {
     let base = usuarios;
     if (filtroListado === "activos") base = base.filter((u) => Boolean(u.activo));
@@ -394,7 +397,8 @@ export default function AdminUsuarios({ token, title }) {
                 <View style={styles.roleChipsWrap}>
                   {roleItems.map((it) => {
                     const active = Number(form.rolId || roleItems[0]?.value) === Number(it.value);
-                    const accent = ROLE_UI[it.label]?.color || COLORS.blue2;
+                    const displayRole = roleDisplayName(it.label);
+                    const accent = ROLE_UI[displayRole]?.color || COLORS.blue2;
                     return (
                       <Pressable
                         key={String(it.value)}
@@ -404,16 +408,16 @@ export default function AdminUsuarios({ token, title }) {
                         ]}
                         onPress={() => setField("rolId", it.value)}
                       >
-                        <Text style={[styles.roleChipTitle, { color: active ? accent : COLORS.text }]}>{it.label}</Text>
-                        <Text style={styles.roleChipHint}>{ROLE_UI[it.label]?.hint || "Perfil operativo"}</Text>
+                        <Text style={[styles.roleChipTitle, { color: active ? accent : COLORS.text }]}>{displayRole}</Text>
+                        <Text style={styles.roleChipHint}>{ROLE_UI[displayRole]?.hint || "Perfil operativo"}</Text>
                       </Pressable>
                     );
                   })}
                 </View>
-                {!!selectedRole && (
-                  <View style={[styles.roleHint, { borderColor: `${ROLE_UI[selectedRole]?.color || COLORS.blue2}66` }]}>
-                    <Text style={[styles.roleHintText, { color: ROLE_UI[selectedRole]?.color || COLORS.blue2 }]}>
-                      {ROLE_UI[selectedRole]?.hint || "Perfil operativo"}
+                {!!selectedRoleDisplay && (
+                  <View style={[styles.roleHint, { borderColor: `${ROLE_UI[selectedRoleDisplay]?.color || COLORS.blue2}66` }]}>
+                    <Text style={[styles.roleHintText, { color: ROLE_UI[selectedRoleDisplay]?.color || COLORS.blue2 }]}>
+                      {ROLE_UI[selectedRoleDisplay]?.hint || "Perfil operativo"}
                     </Text>
                   </View>
                 )}
@@ -636,21 +640,18 @@ export default function AdminUsuarios({ token, title }) {
                     <View
                       style={[
                         styles.badge,
-                        { backgroundColor: `${ROLE_UI[u.rolNombre]?.color || COLORS.blue2}15`, borderColor: `${ROLE_UI[u.rolNombre]?.color || COLORS.blue2}55` },
+                        {
+                          backgroundColor: `${ROLE_UI[roleDisplayName(u.rolNombre)]?.color || COLORS.blue2}15`,
+                          borderColor: `${ROLE_UI[roleDisplayName(u.rolNombre)]?.color || COLORS.blue2}55`,
+                        },
                       ]}
                     >
-                      <Text style={styles.badgeText}>{u.rolNombre || "Sin rol"}</Text>
+                      <Text style={styles.badgeText}>{roleDisplayName(u.rolNombre)}</Text>
                     </View>
                     <View style={[styles.badge, u.activo ? styles.badgeActive : styles.badgeInactive]}>
                       <Text style={styles.badgeText}>{u.activo ? "Activo" : "Inactivo"}</Text>
                     </View>
                   </View>
-                  <Text style={styles.cardDetail}>
-                    Cuenta: {u.cuentaNumero || u.cuentaBancaria || "-"} · {u.cuentaTipo || "-"}
-                  </Text>
-                  <Text style={styles.cardDetail}>
-                    Banco: {u.banco || "-"} · Titular: {u.titularNombre || "-"} ({u.titularRut || "-"})
-                  </Text>
                 </View>
                 <View style={styles.actions}>
                   <Pressable style={styles.smallBtn} onPress={() => onEdit(u)} disabled={loading}>

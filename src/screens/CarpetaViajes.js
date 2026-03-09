@@ -42,6 +42,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
   const [justifyingById, setJustifyingById] = useState({});
   const [liftingById, setLiftingById] = useState({});
   const [registrandoSaldoById, setRegistrandoSaldoById] = useState({});
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [showNotificaciones, setShowNotificaciones] = useState(false);
 
   const totalAsignado = items.reduce((acc, it) => acc + Number(it.totalAsignado || 0), 0);
   const totalRendido = items.reduce((acc, it) => acc + Number(it.totalRendido || 0), 0);
@@ -127,17 +129,35 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     }
   }, [token]);
 
+  const loadNotificaciones = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/Rendiciones/saldos/notificaciones?top=10`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setNotificaciones([]);
+        return;
+      }
+      const data = await res.json();
+      setNotificaciones(Array.isArray(data) ? data : []);
+    } catch {
+      setNotificaciones([]);
+    }
+  }, [token]);
+
   useEffect(() => {
     load();
     loadSaldos();
     loadJustificadas();
-  }, [load, loadSaldos, loadJustificadas]);
+    loadNotificaciones();
+  }, [load, loadSaldos, loadJustificadas, loadNotificaciones]);
 
   const onActualizar = useCallback(() => {
     load(1);
     loadSaldos(1);
     loadJustificadas();
-  }, [load, loadSaldos, loadJustificadas]);
+    loadNotificaciones();
+  }, [load, loadSaldos, loadJustificadas, loadNotificaciones]);
 
   const onEnviarContadora = async (id) => {
     if (sendingContadoraById[id]) return;
@@ -467,6 +487,32 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
         ]}
       />
 
+      <View style={dash.panel}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={dash.panelTitle}>Notificaciones</Text>
+          <Pressable style={dash.docBtn} onPress={() => setShowNotificaciones((v) => !v)}>
+            <Text style={dash.docBtnText}>{showNotificaciones ? "Ocultar" : "Mostrar"}</Text>
+          </Pressable>
+        </View>
+        {!showNotificaciones ? (
+          <Text style={dash.docSub}>Panel contraido.</Text>
+        ) : notificaciones.length === 0 ? (
+          <Text style={dash.docSub}>Sin notificaciones.</Text>
+        ) : (
+          notificaciones.map((n) => (
+            <View key={String(n.id)} style={{ borderTopWidth: 1, borderTopColor: "#E5E7EB", paddingTop: 8, marginTop: 8 }}>
+              <Text style={dash.docTitle}>{n.titulo || "Notificacion"}</Text>
+              <Text style={dash.docSub}>
+                {formatFechaCorta(n.fechaRegistro)}
+                {n.rendicionId ? ` | Rendicion #${n.rendicionId}` : ""}
+                {typeof n.monto === "number" ? ` | $ ${Number(n.monto || 0).toLocaleString("es-CL")}` : ""}
+              </Text>
+              {!!n.mensaje ? <Text style={dash.docSub}>{n.mensaje}</Text> : null}
+            </View>
+          ))
+        )}
+      </View>
+
       {viewMode !== "saldos" ? (
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Pendientes de revision</Text>
@@ -682,10 +728,13 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                 <Text style={dash.docSub}>Pendientes: {grupo.rows.length} | {saldoOpenByCap[grupo.capacitador] ? "Ocultar" : "Ver"}</Text>
               </Pressable>
               {saldoOpenByCap[grupo.capacitador]
-                ? grupo.rows.map((r) => {
+                  ? grupo.rows.map((r) => {
                     const saldoEstado = resolveSaldoEstado(r);
+                    const saldoEstadoRaw = normalizeText(r?.saldoEstado || "");
                     const saldoPendiente = Number(r.saldoPendiente || 0);
                     const canRegistrar = saldoEstado === "Pendiente" && saldoPendiente > 0;
+                    const devolucionReportada =
+                      saldoEstadoRaw === "devolucionreportadacapacitador" && resolveTipoResultado(r) === "Devolucion";
                     return (
                       <View key={`saldo-${r.id}`} style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#E5E7EB" }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -707,7 +756,9 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                                     ? "Registrando..."
                                     : resolveTipoResultado(r) === "Reembolso"
                                       ? "Registrar pago"
-                                      : "Registrar devolucion"}
+                                      : devolucionReportada
+                                        ? "Confirmar devolucion"
+                                        : "Registrar devolucion"}
                                 </Text>
                               </Pressable>
                             ) : (

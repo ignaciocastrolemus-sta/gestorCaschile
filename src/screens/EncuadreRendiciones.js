@@ -56,28 +56,49 @@ const getPeriodoLabel = (value) => {
   });
 };
 
-const getEstadoVisual = (diferencia) => {
-  const diff = Number(diferencia || 0);
-  if (diff === 0) return { key: "cuadra", label: "Cuadra", color: "#146C43", bg: "#EAF8EF" };
-  if (diff > 0) return { key: "faltante", label: "Faltante", color: "#B54708", bg: "#FFF3E8" };
-  return { key: "exceso", label: "Exceso", color: "#B42318", bg: "#FEECEC" };
+const getSaldoActualSigned = (item) => {
+  if (!item || typeof item !== "object") return 0;
+  const pendiente = Number(item.saldoPendiente || 0);
+  const saldoEstado = normalize(item.saldoEstado);
+  const tipoResultado = normalize(item.tipoResultado);
+  const isCerrado =
+    pendiente <= 0 ||
+    saldoEstado.includes("cerrado") ||
+    saldoEstado.includes("pagado") ||
+    saldoEstado.includes("completada") ||
+    saldoEstado.includes("sinsaldo");
+  if (isCerrado) return 0;
+  if (tipoResultado === "reembolso") return Math.abs(pendiente);
+  if (tipoResultado === "devolucion") return -Math.abs(pendiente);
+  return 0;
 };
 
-const getReembolsoPara = (itemOrDiff) => {
-  if (itemOrDiff && typeof itemOrDiff === "object") {
-    const fromApi = itemOrDiff.reembolsoPara;
+const getEstadoVisual = (item) => {
+  const saldo = getSaldoActualSigned(item);
+  if (saldo === 0) return { key: "cuadra", label: "Cerrada", color: "#146C43", bg: "#EAF8EF" };
+  if (saldo > 0) return { key: "faltante", label: "Empresa debe", color: "#B54708", bg: "#FFF3E8" };
+  return { key: "exceso", label: "Capacitador debe", color: "#B42318", bg: "#FEECEC" };
+};
+
+const getReembolsoPara = (item) => {
+  if (item && typeof item === "object") {
+    const saldo = getSaldoActualSigned(item);
+    if (saldo > 0) return "Capacitador";
+    if (saldo < 0) return "Empresa";
+    const fromApi = item.reembolsoPara;
     if (typeof fromApi === "string" && fromApi.trim()) return fromApi;
   }
-  const diff = Number(
-    itemOrDiff && typeof itemOrDiff === "object" ? itemOrDiff.diferencia : itemOrDiff || 0
-  );
-  if (diff > 0) return "Capacitador";
-  if (diff < 0) return "Empresa";
   return "Sin saldo";
 };
 
 const getCombustible = (item) =>
   Number(item?.viaje?.copec ?? item?.viaje?.combustible ?? item?.copec ?? item?.combustible ?? 0);
+
+const getMonthKey = (item) => {
+  const d = new Date(item?.viaje?.fechaInicio || item?.fechaEnvio);
+  if (Number.isNaN(d.getTime())) return "sin-fecha";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
 
 // Escapa celdas para CSV compatible con Excel.
 const csvCell = (value) => {
@@ -110,12 +131,14 @@ export default function EncuadreRendiciones({ token }) {
     anio: persisted?.filtro?.anio || defaultAnio,
     capacitador: persisted?.filtro?.capacitador || "todos",
     estado: persisted?.filtro?.estado || "todos",
+    saldoVista: persisted?.filtro?.saldoVista || "todos",
   });
   const [draftFiltro, setDraftFiltro] = useState({
     mes: persisted?.draftFiltro?.mes || defaultMes,
     anio: persisted?.draftFiltro?.anio || defaultAnio,
     capacitador: persisted?.draftFiltro?.capacitador || "todos",
     estado: persisted?.draftFiltro?.estado || "todos",
+    saldoVista: persisted?.draftFiltro?.saldoVista || "todos",
   });
   const [search, setSearch] = useState(persisted?.search || "");
   const [selectedItem, setSelectedItem] = useState(null);
@@ -191,8 +214,8 @@ export default function EncuadreRendiciones({ token }) {
     }
   }, [filtro, draftFiltro, search]);
 
-  // Filtrado visual para mantener experiencia rapida.
-  const itemsFiltrados = useMemo(() => {
+  // Filtrado base (sin saldoVista) para calcular contadores rapidos.
+  const itemsBaseFiltrados = useMemo(() => {
     return items.filter((it) => {
       const d = new Date(it?.viaje?.fechaInicio);
       const mes = !Number.isNaN(d.getTime()) ? String(d.getMonth() + 1).padStart(2, "0") : "sin";
@@ -223,12 +246,43 @@ export default function EncuadreRendiciones({ token }) {
     });
   }, [items, filtro, search]);
 
+  // Filtrado final aplicando vista de saldo.
+  const itemsFiltrados = useMemo(() => {
+    return itemsBaseFiltrados.filter((it) => {
+      const saldoActual = getSaldoActualSigned(it);
+      if (filtro.saldoVista === "pendientes") return saldoActual !== 0;
+      if (filtro.saldoVista === "cerradas") return saldoActual === 0;
+      return true;
+    });
+  }, [itemsBaseFiltrados, filtro.saldoVista]);
+
+  const saldoVistaStats = useMemo(() => {
+    const total = itemsBaseFiltrados.length;
+    const pendientes = itemsBaseFiltrados.filter((it) => getSaldoActualSigned(it) !== 0).length;
+    const cerradas = total - pendientes;
+    return { total, pendientes, cerradas };
+  }, [itemsBaseFiltrados]);
+
   const totalPages = Math.max(1, Math.ceil(itemsFiltrados.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
   const itemsPaginados = useMemo(() => {
     const start = (pageSafe - 1) * PAGE_SIZE;
     return itemsFiltrados.slice(start, start + PAGE_SIZE);
   }, [itemsFiltrados, pageSafe, PAGE_SIZE]);
+
+  const itemsPaginadosConGrupo = useMemo(() => {
+    let prevKey = "";
+    return itemsPaginados.map((it) => {
+      const key = getMonthKey(it);
+      const showMonth = key !== prevKey;
+      prevKey = key;
+      return {
+        ...it,
+        _showMonth: showMonth,
+        _monthLabel: getPeriodoLabel(it?.viaje?.fechaInicio || it?.fechaEnvio),
+      };
+    });
+  }, [itemsPaginados]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -238,8 +292,9 @@ export default function EncuadreRendiciones({ token }) {
       (acc, it) => {
         acc.asignado += Number(it.totalAsignado || 0);
         acc.rendido += Number(it.totalRendido || 0);
-        acc.diff += Number(it.diferencia || 0);
-        if (Number(it.diferencia || 0) === 0) acc.cuadradas += 1;
+        const saldo = getSaldoActualSigned(it);
+        acc.diff += saldo;
+        if (saldo === 0) acc.cuadradas += 1;
         return acc;
       },
       { asignado: 0, rendido: 0, diff: 0, cuadradas: 0 }
@@ -256,17 +311,24 @@ export default function EncuadreRendiciones({ token }) {
   };
 
   const limpiarFiltros = () => {
-    const base = { mes: defaultMes, anio: defaultAnio, capacitador: "todos", estado: "todos" };
+    const base = { mes: defaultMes, anio: defaultAnio, capacitador: "todos", estado: "todos", saldoVista: "todos" };
     setDraftFiltro(base);
     setFiltro(base);
     setSearch("");
     setPage(1);
   };
 
+  const aplicarSaldoVistaRapida = (modo) => {
+    setDraftFiltro((prev) => ({ ...prev, saldoVista: modo }));
+    setFiltro((prev) => ({ ...prev, saldoVista: modo }));
+    setPage(1);
+  };
+
   const descargarCsv = (soloItem) => {
     const sep = ";";
     const rows = (soloItem ? [soloItem] : itemsFiltrados).map((it) => {
-      const estadoVisual = getEstadoVisual(it?.diferencia);
+      const estadoVisual = getEstadoVisual(it);
+      const saldoActual = getSaldoActualSigned(it);
       const reembolsoPara = getReembolsoPara(it);
       const combustible = getCombustible(it);
       return [
@@ -281,7 +343,7 @@ export default function EncuadreRendiciones({ token }) {
         combustible,
         Number(it?.totalAsignado || 0),
         Number(it?.totalRendido || 0),
-        Number(it?.diferencia || 0),
+        Number(saldoActual || 0),
       ]
         .map(csvCell)
         .join(sep);
@@ -307,7 +369,7 @@ export default function EncuadreRendiciones({ token }) {
         "Combustible",
         "Total Asignado",
         "Total Rendido",
-        "Diferencia",
+        "Saldo actual",
       ]
         .map(csvCell)
         .join(sep),
@@ -349,7 +411,8 @@ export default function EncuadreRendiciones({ token }) {
 
     const rowsHtml = data
       .map((it) => {
-        const estadoVisual = getEstadoVisual(it?.diferencia);
+        const estadoVisual = getEstadoVisual(it);
+        const saldoActual = getSaldoActualSigned(it);
         const reembolsoPara = getReembolsoPara(it);
         const combustible = getCombustible(it);
         return `
@@ -365,7 +428,7 @@ export default function EncuadreRendiciones({ token }) {
             <td style="text-align:right">${Number(combustible || 0).toLocaleString("es-CL")}</td>
             <td style="text-align:right">${Number(it?.totalAsignado || 0).toLocaleString("es-CL")}</td>
             <td style="text-align:right">${Number(it?.totalRendido || 0).toLocaleString("es-CL")}</td>
-            <td style="text-align:right">${Number(it?.diferencia || 0).toLocaleString("es-CL")}</td>
+            <td style="text-align:right">${Number(saldoActual || 0).toLocaleString("es-CL")}</td>
           </tr>
         `;
       })
@@ -406,7 +469,7 @@ export default function EncuadreRendiciones({ token }) {
                 <th>Combustible</th>
                 <th>Total Asignado</th>
                 <th>Total Rendido</th>
-                <th>Diferencia</th>
+                <th>Saldo actual</th>
               </tr>
             </thead>
             <tbody>
@@ -454,7 +517,7 @@ export default function EncuadreRendiciones({ token }) {
         "Combustible",
         "Total Asignado",
         "Total Rendido",
-        "Diferencia",
+        "Saldo actual",
       ],
       rows: data.map((it) => [
         { value: it.id },
@@ -463,12 +526,12 @@ export default function EncuadreRendiciones({ token }) {
         { value: it?.viaje?.regionNombre || "-" },
         { value: getPeriodoLabel(it?.viaje?.fechaInicio) },
         { value: it?.estado || "-" },
-        { value: getEstadoVisual(it?.diferencia).label },
+        { value: getEstadoVisual(it).label },
         { value: getReembolsoPara(it) },
         { value: `$ ${fmtMoney(getCombustible(it))}`, align: "right" },
         { value: `$ ${fmtMoney(it?.totalAsignado || 0)}`, align: "right" },
         { value: `$ ${fmtMoney(it?.totalRendido || 0)}`, align: "right" },
-        { value: `$ ${fmtMoney(it?.diferencia || 0)}`, align: "right" },
+        { value: `$ ${fmtMoney(getSaldoActualSigned(it) || 0)}`, align: "right" },
       ]),
     });
     if (!ok) Alert.alert("Exportar", "La exportacion PDF solo esta habilitada en web.");
@@ -501,7 +564,7 @@ export default function EncuadreRendiciones({ token }) {
           { key: "rendido", label: "Total rendido", value: `$ ${fmtMoney(totales.rendido)}` },
           {
             key: "diferencia",
-            label: "Diferencia",
+            label: "Saldo actual",
             value: `$ ${fmtMoney(totales.diff)}`,
             valueColor: Number(totales.diff) === 0 ? "#146C43" : "#B54708",
           },
@@ -577,6 +640,33 @@ export default function EncuadreRendiciones({ token }) {
           </View>
         </View>
 
+        <View style={styles.quickStateRow}>
+          <Pressable
+            style={[styles.quickStateBtn, filtro.saldoVista === "todos" && styles.quickStateBtnActive]}
+            onPress={() => aplicarSaldoVistaRapida("todos")}
+          >
+            <Text style={[styles.quickStateText, filtro.saldoVista === "todos" && styles.quickStateTextActive]}>
+              Ver todas ({saldoVistaStats.total})
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.quickStateBtn, filtro.saldoVista === "pendientes" && styles.quickStateBtnActive]}
+            onPress={() => aplicarSaldoVistaRapida("pendientes")}
+          >
+            <Text style={[styles.quickStateText, filtro.saldoVista === "pendientes" && styles.quickStateTextActive]}>
+              Solo pendientes ({saldoVistaStats.pendientes})
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.quickStateBtn, filtro.saldoVista === "cerradas" && styles.quickStateBtnActive]}
+            onPress={() => aplicarSaldoVistaRapida("cerradas")}
+          >
+            <Text style={[styles.quickStateText, filtro.saldoVista === "cerradas" && styles.quickStateTextActive]}>
+              Solo cerradas ({saldoVistaStats.cerradas})
+            </Text>
+          </Pressable>
+        </View>
+
         <View style={styles.actionRow}>
           <Pressable style={styles.primaryBtn} onPress={aplicarFiltros}>
             <Text style={styles.primaryText}>{loading ? "Cargando..." : "Aplicar"}</Text>
@@ -608,16 +698,22 @@ export default function EncuadreRendiciones({ token }) {
                 <Text style={[styles.th, { flex: 1 }]}>Combustible</Text>
                 <Text style={[styles.th, { flex: 1.2 }]}>Asignado</Text>
                 <Text style={[styles.th, { flex: 1.2 }]}>Rendido</Text>
-                <Text style={[styles.th, { flex: 1.1 }]}>Diferencia</Text>
+                <Text style={[styles.th, { flex: 1.1 }]}>Saldo actual</Text>
                 <Text style={[styles.th, { flex: 1.1 }]}>Estado</Text>
                 <Text style={[styles.th, { flex: 1.6, textAlign: "left" }]}>Acciones</Text>
               </View>
 
-              {itemsPaginados.map((it) => {
-                const estadoVisual = getEstadoVisual(it?.diferencia);
+              {itemsPaginadosConGrupo.map((it) => {
+                const estadoVisual = getEstadoVisual(it);
+                const saldoActual = getSaldoActualSigned(it);
                 return (
+                  <React.Fragment key={it.id}>
+                  {it._showMonth ? (
+                    <View style={styles.monthGroupRow}>
+                      <Text style={styles.monthGroupText}>{it._monthLabel}</Text>
+                    </View>
+                  ) : null}
                   <View
-                    key={it.id}
                     style={[
                       styles.tableRow,
                       estadoVisual.key === "cuadra" ? styles.rowOk : null,
@@ -639,7 +735,7 @@ export default function EncuadreRendiciones({ token }) {
                     <Text style={[styles.td, { flex: 1 }]}>$ {fmtMoney(getCombustible(it))}</Text>
                     <Text style={[styles.td, { flex: 1.2 }]}>$ {fmtMoney(it.totalAsignado)}</Text>
                     <Text style={[styles.td, { flex: 1.2 }]}>$ {fmtMoney(it.totalRendido)}</Text>
-                    <Text style={[styles.td, { flex: 1.1 }]}>$ {fmtMoney(it.diferencia)}</Text>
+                    <Text style={[styles.td, { flex: 1.1 }]}>$ {fmtMoney(saldoActual)}</Text>
 
                     <View style={{ flex: 1.1 }}>
                       <View style={[styles.statusPill, { backgroundColor: estadoVisual.bg }]}>
@@ -658,6 +754,7 @@ export default function EncuadreRendiciones({ token }) {
                       </Pressable>
                     </View>
                   </View>
+                  </React.Fragment>
                 );
               })}
             </View>
@@ -725,7 +822,10 @@ export default function EncuadreRendiciones({ token }) {
                     Rendido: $ {fmtMoney(selectedItem?.totalRendido || 0)}
                   </Text>
                   <Text style={styles.modalTotalText}>
-                    Diferencia: $ {fmtMoney(selectedItem?.diferencia || 0)}
+                    Diferencia original: $ {fmtMoney(selectedItem?.diferencia || 0)}
+                  </Text>
+                  <Text style={styles.modalTotalText}>
+                    Saldo actual: $ {fmtMoney(getSaldoActualSigned(selectedItem) || 0)}
                   </Text>
                 </View>
 
@@ -817,6 +917,33 @@ const styles = StyleSheet.create({
     marginTop: 12,
     flexWrap: "wrap",
   },
+  quickStateRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+    flexWrap: "wrap",
+  },
+  quickStateBtn: {
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#F8FAFF",
+    justifyContent: "center",
+  },
+  quickStateBtnActive: {
+    borderColor: "#AFC8FF",
+    backgroundColor: "#E8F0FF",
+  },
+  quickStateText: {
+    color: COLORS.text,
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  quickStateTextActive: {
+    color: COLORS.blue2,
+  },
   primaryBtn: {
     height: 40,
     minWidth: 120,
@@ -862,6 +989,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
     gap: 10,
+  },
+  monthGroupRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: "#EEF3FF",
+    borderTopWidth: 1,
+    borderTopColor: "#D9E5FF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#D9E5FF",
+  },
+  monthGroupText: {
+    color: COLORS.blue2,
+    fontWeight: "900",
+    textTransform: "capitalize",
+    fontSize: 12,
   },
   rowOk: { backgroundColor: "#FAFFFC" },
   rowWarn: { backgroundColor: "#FFFDF8" },

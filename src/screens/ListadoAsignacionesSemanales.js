@@ -28,6 +28,17 @@ export default function ListadoAsignacionesSemanales({ token }) {
 
   const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const formatMoney = (value) => `$ ${Number(value || 0).toLocaleString("es-CL")}`;
+  const formatDate = (value) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  };
+  const getWeekLabel = (startDateValue) => {
+    const d = toDate(startDateValue);
+    if (!d) return "Semana";
+    return `Semana ${Math.ceil(d.getDate() / 7)}`;
+  };
 
   const toDate = (value) => {
     if (!value) return null;
@@ -143,26 +154,50 @@ export default function ListadoAsignacionesSemanales({ token }) {
 
   const filteredPeriodos = useMemo(() => {
     const list = Array.isArray(periodos) ? periodos : [];
-    return list.filter((p) => {
-      const d = toDate(p.fechaInicio ?? p.FechaInicio);
-      if (!d) return false;
-      return d.getFullYear() === Number(selectedYear) && d.getMonth() === selectedMonth;
-    });
+    return list
+      .filter((p) => {
+        const d = toDate(p.fechaInicio ?? p.FechaInicio);
+        if (!d) return false;
+        return d.getFullYear() === Number(selectedYear) && d.getMonth() === selectedMonth;
+      })
+      .sort((a, b) => {
+        const fa = toDate(a.fechaInicio ?? a.FechaInicio)?.getTime() || 0;
+        const fb = toDate(b.fechaInicio ?? b.FechaInicio)?.getTime() || 0;
+        return fa - fb;
+      });
   }, [periodos, selectedMonth, selectedYear]);
 
   const periodosItemsByMonth = useMemo(
     () =>
-      filteredPeriodos.map((p) => {
+      filteredPeriodos
+        .slice()
+        .sort((a, b) => {
+          const fa = toDate(a.fechaInicio ?? a.FechaInicio)?.getTime() || 0;
+          const fb = toDate(b.fechaInicio ?? b.FechaInicio)?.getTime() || 0;
+          return fa - fb;
+        })
+        .map((p) => {
         const nombre = p.nombre ?? p.Nombre ?? "";
-        const fi = String(p.fechaInicio ?? p.FechaInicio ?? "").slice(0, 10);
-        const ft = String(p.fechaTermino ?? p.FechaTermino ?? "").slice(0, 10);
+        const fiRaw = p.fechaInicio ?? p.FechaInicio;
+        const ftRaw = p.fechaTermino ?? p.FechaTermino;
+        const fiDate = toDate(fiRaw);
+        const weekInMonth = fiDate ? Math.ceil(fiDate.getDate() / 7) : null;
+        const fi = formatDate(fiRaw);
+        const ft = formatDate(ftRaw);
+        const semanaLabel = weekInMonth ? `Semana ${weekInMonth}` : "Semana";
         return {
-          label: fi && ft ? `${nombre} (${fi} - ${ft})` : nombre,
+          label: fi && ft ? `${semanaLabel} (${fi} - ${ft})` : nombre || semanaLabel,
           value: String(p.id ?? p.Id),
         };
       }),
     [filteredPeriodos]
   );
+
+  useEffect(() => {
+    if (periodoId && !periodosItemsByMonth.some((p) => p.value === periodoId)) {
+      setPeriodoId("");
+    }
+  }, [periodoId, periodosItemsByMonth]);
 
   const capacitadoresItems = useMemo(
     () =>
@@ -305,8 +340,22 @@ export default function ListadoAsignacionesSemanales({ token }) {
 
         <Row gap={12} style={{ marginTop: 12 }}>
           <Col>
-            <Label>Periodo</Label>
-            <Select value={periodoId} onValueChange={setPeriodoId} items={[{ label: "Todos", value: "" }, ...periodosItemsByMonth]} />
+            <Label>Semana del mes</Label>
+            <Select
+              value={periodoId}
+              onValueChange={setPeriodoId}
+              items={[{ label: "Todos", value: "" }, ...periodosItemsByMonth]}
+            />
+            <Text style={styles.periodHint}>
+              {periodosItemsByMonth.length
+                ? `${MONTHS[selectedMonth]} ${selectedYear}: ${periodosItemsByMonth.length} semana(s) disponibles`
+                : `${MONTHS[selectedMonth]} ${selectedYear}: sin semanas definidas`}
+            </Text>
+            {periodoId ? (
+              <Text style={styles.weekSelectedHint}>
+                Semana seleccionada: {periodosItemsByMonth.find((w) => w.value === periodoId)?.label || "-"}
+              </Text>
+            ) : null}
           </Col>
           <Col>
             <Label>Capacitador</Label>
@@ -439,9 +488,9 @@ export default function ListadoAsignacionesSemanales({ token }) {
             filteredPeriodos.map((p) => (
               <View key={p.id} style={[styles.row, isMobile && styles.rowMobile]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.title}>{p.nombre}</Text>
+                  <Text style={styles.title}>{getWeekLabel(p.fechaInicio)} · {p.nombre}</Text>
                   <Text style={styles.sub}>
-                    {String(p.fechaInicio).slice(0, 10)} - {String(p.fechaTermino).slice(0, 10)}
+                    {formatDate(p.fechaInicio)} - {formatDate(p.fechaTermino)}
                   </Text>
                 </View>
                 <View style={[styles.right, isMobile && styles.rightMobile]}>
@@ -572,6 +621,18 @@ const styles = StyleSheet.create({
   monthText: { fontWeight: "900", color: COLORS.text },
   monthTextActive: { color: "#fff" },
   yearSelect: { minWidth: 120 },
+  periodHint: {
+    marginTop: 6,
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  weekSelectedHint: {
+    marginTop: 4,
+    color: COLORS.blue2,
+    fontSize: 12,
+    fontWeight: "800",
+  },
   summaryRow: {
     flexDirection: "row",
     gap: 10,
