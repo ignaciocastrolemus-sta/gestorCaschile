@@ -1,8 +1,4 @@
-const normalizeText = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+import { normalizeText } from "./textUtils";
 
 const hasAny = (text, words) => words.some((w) => text.includes(w));
 

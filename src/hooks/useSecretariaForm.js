@@ -201,8 +201,9 @@ export default function useSecretariaForm(authToken) {
       lastMontosKey.current = "";
       if (montosAbortRef.current) montosAbortRef.current.abort();
     } catch (error) {
-      Alert.alert("Error", error?.message || "No se pudo guardar.");
-      setSaveMsg("Error al guardar.");
+      const backendMessage = error?.message || "No se pudo guardar.";
+      Alert.alert("Error", backendMessage);
+      setSaveMsg(backendMessage);
     } finally {
       setIsSaving(false);
     }

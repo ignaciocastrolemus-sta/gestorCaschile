@@ -1,12 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, View, Text, Pressable, StyleSheet, TextInput } from "react-native";
-import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
 import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import StatusMessage from "../components/StatusMessage";
 import { getHiddenNotificationIds, getVisibleNotifications, hideNotifications } from "../utils/notificationUtils";
+import { normalizeText } from "../utils/textUtils";
+import {
+  obtenerNotificacionesSaldo,
+  obtenerRendicionesMias,
+  obtenerSaldoMovimientos,
+  registrarSaldoCapacitador,
+} from "../api/rendiciones";
 
 const fmtMoney = (n) => `$ ${Number(n || 0).toLocaleString("es-CL")}`;
 const fmtDate = (value) => {
@@ -15,12 +21,6 @@ const fmtDate = (value) => {
   if (Number.isNaN(d.getTime())) return "-";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 };
-
-const normalizeText = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
 
 const getSaldoSigned = (r) => {
   const pendiente = Number(r?.saldoPendiente || 0);
@@ -70,24 +70,13 @@ export default function CapacitadorSaldos({ token }) {
 
   const load = useCallback(async () => {
     try {
-      const [res, resNoti] = await Promise.all([
-        fetch(`${API_BASE}/Rendiciones/mias`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_BASE}/Rendiciones/saldos/notificaciones?top=20`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [data, dataNoti] = await Promise.all([
+        obtenerRendicionesMias(token),
+        obtenerNotificacionesSaldo(token, 20).catch(() => []),
       ]);
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
       const list = (Array.isArray(data) ? data : []).filter((r) => normalizeText(r?.tipoResultado) !== "cuadrada");
       setItems(list);
-      if (resNoti.ok) {
-        const dataNoti = await resNoti.json();
-        setNotificaciones(Array.isArray(dataNoti) ? dataNoti : []);
-      } else {
-        setNotificaciones([]);
-      }
+      setNotificaciones(Array.isArray(dataNoti) ? dataNoti : []);
       setError("");
     } catch (e) {
       setError(e?.message || "No se pudieron cargar saldos.");
@@ -157,12 +146,7 @@ export default function CapacitadorSaldos({ token }) {
       if (observacion) formData.append("observacion", observacion);
       if (comprobante) formData.append("comprobante", comprobante, comprobante.name);
 
-      const res = await fetch(`${API_BASE}/Rendiciones/${r.id}/registrar-saldo-capacitador`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await registrarSaldoCapacitador(token, r.id, formData);
       setInfo(requiereComprobante ? "Devolucion informada correctamente." : "Recepcion confirmada correctamente.");
       closeActionForm(r.id);
       await load();
@@ -181,11 +165,7 @@ export default function CapacitadorSaldos({ token }) {
 
     try {
       setLoadingById((prev) => ({ ...prev, [rendicionId]: true }));
-      const res = await fetch(`${API_BASE}/Rendiciones/${rendicionId}/saldo-movimientos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = await obtenerSaldoMovimientos(token, rendicionId);
       setMovimientosById((prev) => ({ ...prev, [rendicionId]: Array.isArray(data) ? data : [] }));
     } catch (e) {
       setMovimientosById((prev) => ({

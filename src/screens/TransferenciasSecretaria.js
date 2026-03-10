@@ -4,27 +4,60 @@ import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
-import { Input } from "../components/UI";
+import { obtenerCapacitadoresUsuarios } from "../api/catalogos";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import StatusMessage from "../components/StatusMessage";
 
+const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+const toDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const formatDate = (value) => {
+  if (!value) return "";
+  const raw = String(value).slice(0, 10);
+  const [yyyy, mm, dd] = raw.split("-");
+  if (!yyyy || !mm || !dd) return raw;
+  return `${dd}/${mm}/${yyyy}`;
+};
+
+const formatPeriodoLabel = (p) => {
+  const nombre = p?.nombre ?? p?.Nombre ?? "Periodo";
+  const inicio = formatDate(p?.fechaInicio ?? p?.FechaInicio);
+  const termino = formatDate(p?.fechaTermino ?? p?.FechaTermino);
+  const activo = (p?.activo ?? p?.Activo) === true ? " · Activa" : "";
+  if (inicio && termino) return `${nombre} (${inicio} - ${termino})${activo}`;
+  return `${nombre}${activo}`;
+};
+
 // Secretaria: transferencias (resumen por capacitador)
 export default function TransferenciasSecretaria({ token }) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
   const [transferRendiciones, setTransferRendiciones] = useState([]);
   const [periodos, setPeriodos] = useState([]);
+  const [capacitadores, setCapacitadores] = useState([]);
   const [actionMsg, setActionMsg] = useState("");
   const [actionKind, setActionKind] = useState("info");
   const [transferEstado, setTransferEstado] = useState("Aprobada");
   const [transferPeriodoId, setTransferPeriodoId] = useState("");
+  const [transferCapacitadorId, setTransferCapacitadorId] = useState("");
   const [draftEstado, setDraftEstado] = useState("Aprobada");
+  const [selectedYear, setSelectedYear] = useState(String(currentYear));
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [draftPeriodoId, setDraftPeriodoId] = useState("");
-  const [draftSearch, setDraftSearch] = useState("");
+  const [draftCapacitadorId, setDraftCapacitadorId] = useState("");
 
   const transferItems = useMemo(
     () =>
       transferRendiciones.map((r) => ({
         capacitador: r.capacitador ?? r.Capacitador ?? "Sin nombre",
+        capacitadorUsuarioId: Number(r.capacitadorUsuarioId ?? r.CapacitadorUsuarioId ?? 0),
         totalAsignado: Number(r.totalAsignado ?? r.TotalAsignado ?? 0),
         totalRendido: Number(r.totalRendido ?? r.TotalRendido ?? 0),
         cantidad: Number(r.cantidadRendiciones ?? r.CantidadRendiciones ?? 0),
@@ -32,12 +65,51 @@ export default function TransferenciasSecretaria({ token }) {
     [transferRendiciones]
   );
 
-  // Filtro local para busqueda rapida por texto en capacitador.
-  const filteredTransferItems = useMemo(() => {
-    const q = (draftSearch || "").trim().toLowerCase();
-    if (!q) return transferItems;
-    return transferItems.filter((t) => String(t.capacitador).toLowerCase().includes(q));
-  }, [transferItems, draftSearch]);
+  const filteredTransferItems = transferItems;
+
+  const capacitadoresItems = useMemo(
+    () =>
+      (Array.isArray(capacitadores) ? capacitadores : [])
+        .map((c) => ({
+          label: c?.nombre || c?.email || "Sin nombre",
+          value: String(c?.id ?? ""),
+        }))
+        .filter((c) => c.value),
+    [capacitadores]
+  );
+
+  const yearItems = useMemo(() => {
+    const years = new Set();
+    (Array.isArray(periodos) ? periodos : []).forEach((p) => {
+      const d = toDate(p?.fechaInicio ?? p?.FechaInicio);
+      if (d) years.add(d.getFullYear());
+    });
+    if (years.size === 0) years.add(currentYear);
+    return Array.from(years)
+      .sort((a, b) => b - a)
+      .map((y) => ({ label: String(y), value: String(y) }));
+  }, [currentYear, periodos]);
+
+  const periodosItemsByMonth = useMemo(
+    () =>
+      (Array.isArray(periodos) ? periodos : [])
+        .filter((p) => {
+          const d = toDate(p?.fechaInicio ?? p?.FechaInicio);
+          if (!d) return false;
+          return d.getFullYear() === Number(selectedYear) && d.getMonth() === selectedMonth;
+        })
+        .sort((a, b) => {
+          const fa = toDate(a?.fechaInicio ?? a?.FechaInicio)?.getTime() || 0;
+          const fb = toDate(b?.fechaInicio ?? b?.FechaInicio)?.getTime() || 0;
+          return fa - fb;
+        })
+        .map((p) => ({
+          label: formatPeriodoLabel(p),
+          value: String(p?.id ?? p?.Id),
+          activo: (p?.activo ?? p?.Activo) === true,
+        })),
+    [periodos, selectedMonth, selectedYear]
+  );
 
   const kpis = useMemo(() => {
     const totalAsignado = filteredTransferItems.reduce((acc, it) => acc + Number(it.totalAsignado || 0), 0);
@@ -64,12 +136,22 @@ export default function TransferenciasSecretaria({ token }) {
     }
   }, [token]);
 
+  const loadCapacitadores = useCallback(async () => {
+    try {
+      const data = await obtenerCapacitadoresUsuarios(token);
+      setCapacitadores(Array.isArray(data) ? data : []);
+    } catch {
+      setCapacitadores([]);
+    }
+  }, [token]);
+
   const loadTransfer = useCallback(
-    async (estado, periodoId) => {
+    async (estado, periodoId, capacitadorId) => {
       try {
         const params = new URLSearchParams();
         if (estado) params.set("estado", estado);
         if (periodoId) params.set("periodoId", periodoId);
+        if (capacitadorId) params.set("capacitadorId", capacitadorId);
         const q = params.toString() ? `?${params.toString()}` : "";
         const res = await fetch(`${API_BASE}/Transferencias/solicitudes${q}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -90,34 +172,6 @@ export default function TransferenciasSecretaria({ token }) {
     [token]
   );
 
-  const downloadTransferFile = async (filename, type) => {
-    try {
-      const params = new URLSearchParams();
-      if (transferEstado) params.set("estado", transferEstado);
-      if (transferPeriodoId) params.set("periodoId", transferPeriodoId);
-      const q = params.toString() ? `?${params.toString()}` : "";
-      const res = await fetch(`${API_BASE}/Transferencias/solicitudes/${type}${q}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo descargar.");
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      setActionMsg(e?.message || "No se pudo descargar.");
-      setActionKind("error");
-    }
-  };
-
   // Exporta una planilla ordenada para Excel sin depender del backend.
   const downloadTransferExcel = () => {
     if (typeof window === "undefined") {
@@ -134,10 +188,16 @@ export default function TransferenciasSecretaria({ token }) {
     const fecha = new Date().toLocaleString("es-CL");
     const periodoNombre =
       transferPeriodoId === ""
-        ? "Periodo activo"
-        : periodos.find((p) => String(p.id ?? p.Id) === String(transferPeriodoId))?.nombre ||
+        ? "Sin semana seleccionada"
+        : periodosItemsByMonth.find((p) => String(p.value) === String(transferPeriodoId))?.label ||
+          periodos.find((p) => String(p.id ?? p.Id) === String(transferPeriodoId))?.nombre ||
           periodos.find((p) => String(p.id ?? p.Id) === String(transferPeriodoId))?.Nombre ||
           transferPeriodoId;
+    const capacitadorNombre =
+      transferCapacitadorId === ""
+        ? "Todos"
+        : capacitadores.find((c) => String(c?.id ?? "") === String(transferCapacitadorId))?.nombre ||
+          transferCapacitadorId;
 
     const rowsHtml = transferItems
       .map(
@@ -170,6 +230,7 @@ export default function TransferenciasSecretaria({ token }) {
           <div class="meta"><b>Fecha:</b> ${esc(fecha)}</div>
           <div class="meta"><b>Estado:</b> ${esc(transferEstado)}</div>
           <div class="meta"><b>Periodo:</b> ${esc(periodoNombre)}</div>
+          <div class="meta"><b>Capacitador:</b> ${esc(capacitadorNombre)}</div>
           <table>
             <thead>
               <tr>
@@ -199,12 +260,19 @@ export default function TransferenciasSecretaria({ token }) {
   };
 
   const onGenerarTransferencias = async () => {
+    if (!transferPeriodoId) {
+      setActionMsg("Selecciona una semana del mes antes de generar transferencias.");
+      setActionKind("error");
+      return;
+    }
+
     try {
       setActionMsg("");
       setActionKind("info");
       const params = new URLSearchParams();
       if (transferEstado) params.set("estado", transferEstado);
       if (transferPeriodoId) params.set("periodoId", transferPeriodoId);
+      if (transferCapacitadorId) params.set("capacitadorId", transferCapacitadorId);
       const q = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`${API_BASE}/Transferencias/solicitudes/generar${q}`, {
         method: "POST",
@@ -217,7 +285,7 @@ export default function TransferenciasSecretaria({ token }) {
       const data = await res.json();
       setActionMsg(`Transferencias generadas: ${data?.created ?? 0}`);
       setActionKind("success");
-      loadTransfer(transferEstado, transferPeriodoId);
+      loadTransfer(transferEstado, transferPeriodoId, transferCapacitadorId);
     } catch (e) {
       setActionMsg(e?.message || "No se pudo generar transferencias.");
       setActionKind("error");
@@ -227,17 +295,27 @@ export default function TransferenciasSecretaria({ token }) {
   const onApplyFilters = () => {
     setTransferEstado(draftEstado);
     setTransferPeriodoId(draftPeriodoId);
-    loadTransfer(draftEstado, draftPeriodoId);
+    setTransferCapacitadorId(draftCapacitadorId);
+    loadTransfer(draftEstado, draftPeriodoId, draftCapacitadorId);
   };
 
   const onClearFilters = () => {
     setDraftEstado("Aprobada");
+    setSelectedYear(String(currentYear));
+    setSelectedMonth(currentMonth);
     setDraftPeriodoId("");
-    setDraftSearch("");
+    setDraftCapacitadorId("");
     setTransferEstado("Aprobada");
     setTransferPeriodoId("");
-    loadTransfer("Aprobada", "");
+    setTransferCapacitadorId("");
+    loadTransfer("Aprobada", "", "");
   };
+
+  useEffect(() => {
+    if (draftPeriodoId && !periodosItemsByMonth.some((p) => String(p.value) === String(draftPeriodoId))) {
+      setDraftPeriodoId("");
+    }
+  }, [draftPeriodoId, periodosItemsByMonth]);
 
   const onGenerateWithConfirm = () => {
     const msg = "Se generaran las transferencias para el filtro actual. ¿Deseas continuar?";
@@ -249,8 +327,9 @@ export default function TransferenciasSecretaria({ token }) {
 
   useEffect(() => {
     loadPeriodos();
-    loadTransfer(transferEstado, transferPeriodoId);
-  }, [loadPeriodos, loadTransfer, transferEstado, transferPeriodoId]);
+    loadCapacitadores();
+    loadTransfer(transferEstado, transferPeriodoId, transferCapacitadorId);
+  }, [loadCapacitadores, loadPeriodos, loadTransfer, transferEstado, transferPeriodoId, transferCapacitadorId]);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
@@ -258,7 +337,7 @@ export default function TransferenciasSecretaria({ token }) {
         title="Transferencias"
         subtitle="Resumen por capacitador para generar transferencias."
         secondaryLabel="Actualizar"
-        onSecondaryPress={() => loadTransfer(transferEstado, transferPeriodoId)}
+        onSecondaryPress={() => loadTransfer(transferEstado, transferPeriodoId, transferCapacitadorId)}
       />
 
       <StatusMessage
@@ -285,7 +364,7 @@ export default function TransferenciasSecretaria({ token }) {
 
       <View style={styles.transferCard}>
         <Text style={styles.transferTitle}>Filtros rapidos</Text>
-        <Text style={styles.transferSub}>Define estado, periodo y busqueda por capacitador.</Text>
+        <Text style={styles.transferSub}>Define estado, año, mes, semana y capacitador.</Text>
         <View style={styles.filterRow}>
           <View style={styles.filterCol}>
             <Text style={styles.transferFilterLabel}>Estado</Text>
@@ -302,31 +381,71 @@ export default function TransferenciasSecretaria({ token }) {
             </View>
           </View>
           <View style={styles.filterCol}>
-            <Text style={styles.transferFilterLabel}>Periodo</Text>
+            <Text style={styles.transferFilterLabel}>Año</Text>
+            <View style={styles.transferSelectWrap}>
+              <Picker
+                selectedValue={selectedYear}
+                onValueChange={(v) => setSelectedYear(v)}
+                style={styles.transferPicker}
+              >
+                {yearItems.map((y) => (
+                  <Picker.Item key={y.value} label={y.label} value={y.value} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+          <View style={styles.filterCol}>
+            <Text style={styles.transferFilterLabel}>Mes</Text>
+            <View style={styles.transferSelectWrap}>
+              <Picker
+                selectedValue={String(selectedMonth)}
+                onValueChange={(v) => setSelectedMonth(Number(v))}
+                style={styles.transferPicker}
+              >
+                {MONTHS.map((m, idx) => (
+                  <Picker.Item key={`${m}-${idx}`} label={m} value={String(idx)} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+          <View style={styles.filterCol}>
+            <Text style={styles.transferFilterLabel}>Semana del mes</Text>
             <View style={styles.transferSelectWrap}>
               <Picker
                 selectedValue={draftPeriodoId}
                 onValueChange={(v) => setDraftPeriodoId(v)}
                 style={styles.transferPicker}
               >
-                <Picker.Item label="Periodo activo" value="" />
-                {periodos.map((p) => (
+                <Picker.Item label="Selecciona semana" value="" />
+                {periodosItemsByMonth.map((p) => (
                   <Picker.Item
-                    key={String(p.id ?? p.Id)}
-                    label={p.nombre ?? p.Nombre}
-                    value={String(p.id ?? p.Id)}
+                    key={p.value}
+                    label={p.label}
+                    value={p.value}
                   />
                 ))}
               </Picker>
             </View>
+            <Text style={styles.transferHint}>
+              {periodosItemsByMonth.length
+                ? `${MONTHS[selectedMonth]} ${selectedYear}: ${periodosItemsByMonth.length} semana(s) disponibles`
+                : `No hay semanas cargadas para ${MONTHS[selectedMonth]} ${selectedYear}`}
+            </Text>
           </View>
           <View style={styles.filterCol}>
             <Text style={styles.transferFilterLabel}>Capacitador</Text>
-            <Input
-              value={draftSearch}
-              onChangeText={setDraftSearch}
-              placeholder="Buscar por nombre o correo"
-            />
+            <View style={styles.transferSelectWrap}>
+              <Picker
+                selectedValue={draftCapacitadorId}
+                onValueChange={(v) => setDraftCapacitadorId(v)}
+                style={styles.transferPicker}
+              >
+                <Picker.Item label="Todos" value="" />
+                {capacitadoresItems.map((c) => (
+                  <Picker.Item key={c.value} label={c.label} value={c.value} />
+                ))}
+              </Picker>
+            </View>
           </View>
         </View>
         <View style={styles.filterActions}>
@@ -369,12 +488,6 @@ export default function TransferenciasSecretaria({ token }) {
         )}
 
         <View style={styles.transferActions}>
-          <Pressable
-            style={styles.transferBtnSecondary}
-            onPress={() => downloadTransferFile("transferencias_solicitudes.csv", "csv")}
-          >
-            <Text style={styles.transferBtnTextSecondary}>Descargar CSV</Text>
-          </Pressable>
           <Pressable style={styles.transferBtnSecondary} onPress={downloadTransferExcel}>
             <Text style={styles.transferBtnTextSecondary}>Descargar Excel</Text>
           </Pressable>
@@ -413,6 +526,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   transferPicker: { height: 40, color: COLORS.text },
+  transferHint: { marginTop: 6, color: COLORS.muted, fontSize: 12, fontWeight: "700" },
   transferTable: { marginTop: 10 },
   transferHeaderRow: {
     flexDirection: "row",

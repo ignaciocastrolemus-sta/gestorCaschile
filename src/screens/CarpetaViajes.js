@@ -1,5 +1,4 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, Pressable, Alert, TextInput, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import dash from "../styles/dashboardStyles";
@@ -8,7 +7,23 @@ import KpiRow from "../components/KpiRow";
 import StatusMessage from "../components/StatusMessage";
 import { isSaldoRendicionValida, normalizeText, resolveSaldoEstado, resolveTipoResultado } from "../utils/saldoUtils";
 import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
-import { obtenerSaldoMovimientos } from "../api/rendiciones";
+import { formatFechaCorta, formatRango, resolveMonthKey, resolveMonthLabel } from "../utils/reportDateUtils";
+import { quickFilterBtn, quickFilterText } from "../utils/quickFilterStyles";
+import {
+  descargarAdjuntoRendicion,
+  enviarRendicionAContadora,
+  justificarPendienteRendicion,
+  levantarJustificacionRendicion,
+  obtenerAdjuntosRendicion,
+  obtenerNotificacionesSaldo,
+  obtenerRendicionesJustificadas,
+  obtenerRendicionesSecretaria,
+  obtenerRendicionesSecretariaPaginadas,
+  obtenerSaldoMovimientos,
+  obtenerSaldos,
+  obtenerSaldosPaginados,
+  registrarSaldoSecretaria,
+} from "../api/rendiciones";
 import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 
@@ -72,29 +87,19 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
 
   const load = useCallback(async (page = itemsPage) => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/secretaria/paged?page=${page}&pageSize=${itemsPageSize}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const fallback = await fetch(`${API_BASE}/Rendiciones/secretaria`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!fallback.ok) {
-          const txt = await fallback.text();
-          throw new Error(txt || "Error al cargar rendiciones");
-        }
-        const data = await fallback.json();
+      try {
+        const data = await obtenerRendicionesSecretariaPaginadas(token, page, itemsPageSize);
+        setItems(Array.isArray(data?.items) ? data.items : []);
+        setItemsTotal(Number(data?.total || 0));
+        setItemsPage(Number(data?.page || page));
+        setError("");
+      } catch {
+        const data = await obtenerRendicionesSecretaria(token);
         setItems(Array.isArray(data) ? data : []);
         setItemsTotal(Array.isArray(data) ? data.length : 0);
         setItemsPage(1);
         setError("");
-        return;
       }
-      const data = await res.json();
-      setItems(Array.isArray(data?.items) ? data.items : []);
-      setItemsTotal(Number(data?.total || 0));
-      setItemsPage(Number(data?.page || page));
-      setError("");
     } catch (e) {
       setError(e?.message || "Error al cargar rendiciones");
     }
@@ -102,25 +107,15 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
 
   const loadSaldos = useCallback(async (page = saldosPage) => {
     try {
-      const res = await fetch(
-        `${API_BASE}/Rendiciones/saldos/paged?page=${page}&pageSize=${saldosPageSize}&incluirCerrados=true`,
-        {
-        headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!res.ok) {
-        const fallback = await fetch(`${API_BASE}/Rendiciones/saldos`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!fallback.ok) return;
-        const raw = await fallback.json();
+      try {
+        const data = await obtenerSaldosPaginados(token, page, saldosPageSize, true);
+        setSaldos(Array.isArray(data?.items) ? data.items : []);
+        setSaldosPage(Number(data?.page || page));
+      } catch {
+        const raw = await obtenerSaldos(token);
         setSaldos(Array.isArray(raw) ? raw : []);
         setSaldosPage(1);
-        return;
       }
-      const data = await res.json();
-      setSaldos(Array.isArray(data?.items) ? data.items : []);
-      setSaldosPage(Number(data?.page || page));
     } catch {
       setSaldos([]);
     }
@@ -128,14 +123,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
 
   const loadJustificadas = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/justificadas`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        setJustificadas([]);
-        return;
-      }
-      const data = await res.json();
+      const data = await obtenerRendicionesJustificadas(token);
       setJustificadas(Array.isArray(data) ? data : []);
     } catch {
       setJustificadas([]);
@@ -144,14 +132,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
 
   const loadNotificaciones = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/saldos/notificaciones?top=10`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        setNotificaciones([]);
-        return;
-      }
-      const data = await res.json();
+      const data = await obtenerNotificacionesSaldo(token, 10);
       setNotificaciones(Array.isArray(data) ? data : []);
     } catch {
       setNotificaciones([]);
@@ -178,14 +159,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       setSendingContadoraById((prev) => ({ ...prev, [id]: true }));
       setError("");
       setInfo("");
-      const res = await fetch(`${API_BASE}/Rendiciones/${id}/enviar-contadora`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo enviar");
-      }
+      await enviarRendicionAContadora(token, id);
       setItems((prev) => prev.filter((r) => r.id !== id));
       setInfo("Rendicion enviada a contadora.");
       load(itemsPage);
@@ -213,15 +187,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
         observacion,
         fechaHasta: fechaRaw ? `${fechaRaw}T00:00:00` : null,
       };
-      const res = await fetch(`${API_BASE}/Rendiciones/${id}/justificar-pendiente`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo justificar.");
-      }
+      await justificarPendienteRendicion(token, id, payload);
       setInfo("Rendicion marcada como pendiente justificada.");
       load(itemsPage);
       loadJustificadas();
@@ -238,15 +204,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       setLiftingById((prev) => ({ ...prev, [id]: true }));
       setError("");
       setInfo("");
-      const res = await fetch(`${API_BASE}/Rendiciones/${id}/levantar-justificacion`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo levantar justificacion.");
-      }
+      await levantarJustificacionRendicion(token, id);
       setInfo("Justificacion levantada.");
       load(itemsPage);
       loadJustificadas();
@@ -269,15 +227,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: true }));
       setError("");
       setInfo("");
-      const res = await fetch(`${API_BASE}/Rendiciones/${r.id}/registrar-saldo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ monto, observacion }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo registrar saldo.");
-      }
+      await registrarSaldoSecretaria(token, r.id, { monto, observacion });
       setInfo("Saldo registrado correctamente.");
       loadSaldos(saldosPage);
     } catch (e) {
@@ -948,14 +898,7 @@ function ViajeRowCard({ data, token, onEnviar, onJustificar, sending = false, ju
     try {
       setAdjuntosLoading(true);
       setAdjuntosError("");
-      const res = await fetch(`${API_BASE}/Rendiciones/${data.id}/adjuntos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudieron cargar adjuntos.");
-      }
-      const rows = await res.json();
+      const rows = await obtenerAdjuntosRendicion(token, data.id);
       setAdjuntos(Array.isArray(rows) ? rows : []);
     } catch (e) {
       setAdjuntosError(e?.message || "No se pudieron cargar adjuntos.");
@@ -969,14 +912,7 @@ function ViajeRowCard({ data, token, onEnviar, onJustificar, sending = false, ju
       if (typeof window === "undefined" || typeof document === "undefined") {
         throw new Error("La descarga de adjuntos esta disponible en web.");
       }
-      const res = await fetch(`${API_BASE}/Rendiciones/adjuntos/${adjuntoId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo descargar.");
-      }
-      const blob = await res.blob();
+      const blob = await descargarAdjuntoRendicion(token, adjuntoId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -1152,61 +1088,11 @@ function resolveGuidance(item) {
   };
 }
 
-function formatRango(inicio, termino) {
-  if (!inicio || !termino) return "";
-  const start = new Date(inicio);
-  const end = new Date(termino);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
-  const fmt = (d) =>
-    String(d.getDate()).padStart(2, "0") +
-    "/" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "/" +
-    d.getFullYear();
-  return `${fmt(start)} - ${fmt(end)}`;
-}
-
-function quickFilterBtn(active) {
-  return {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: active ? "#BFD4FF" : "#D9E5FF",
-    backgroundColor: active ? "#E8F0FF" : "#fff",
-  };
-}
-
-function quickFilterText(active) {
-  return { fontWeight: "900", color: active ? "#1D4ED8" : "#374151", fontSize: 12 };
-}
-
-function formatFechaCorta(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
 function resolveMontoSaldo(item) {
   const dif = Number(item?.diferencia ?? Number(item?.totalRendido || 0) - Number(item?.totalAsignado || 0));
   const pendiente = Number(item?.saldoPendiente || 0);
   if (pendiente > 0) return pendiente;
   return Math.abs(dif);
-}
-
-function resolveMonthKey(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function resolveMonthLabel(key) {
-  if (!key || !key.includes("-")) return "Sin mes";
-  const [year, month] = key.split("-");
-  const d = new Date(Number(year), Number(month) - 1, 1);
-  if (Number.isNaN(d.getTime())) return key;
-  return d.toLocaleDateString("es-CL", { month: "long", year: "numeric" });
 }
 
 const summaryCardStyle = {

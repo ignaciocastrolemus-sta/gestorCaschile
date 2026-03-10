@@ -11,6 +11,7 @@ import {
   actualizarAsignacionSemanal,
   eliminarAsignacionSemanal,
 } from "../api/asignacionesSemanales";
+import { obtenerCapacitadoresUsuarios } from "../api/catalogos";
 const formatDate = (value) => {
   if (!value) return "";
   const raw = String(value).slice(0, 10);
@@ -79,14 +80,14 @@ export default function AsignacionSemanal({ token }) {
 
   const loadCatalogos = useCallback(async () => {
     try {
-      const [p, c, cl, r] = await Promise.all([
+      const [p, cl, r, caps] = await Promise.all([
         fetch(`${API_BASE}/Periodos`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/Capacitadores`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_BASE}/Clientes`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_BASE}/Regiones`, { headers: { Authorization: `Bearer ${token}` } }),
+        obtenerCapacitadoresUsuarios(token).catch(() => []),
       ]);
       if (p.ok) setPeriodos(await p.json());
-      if (c.ok) setCapacitadores(await c.json());
+      setCapacitadores(Array.isArray(caps) ? caps : []);
       if (cl.ok) setClientes(await cl.json());
       if (r.ok) setRegiones(await r.json());
     } catch {
@@ -141,7 +142,9 @@ export default function AsignacionSemanal({ token }) {
       const itId = it.id ?? it.Id;
       if (editing && String(itId) === String(editing.id)) return false;
       const samePeriodo = String(it.periodoId ?? it.PeriodoId) === String(form.periodoId);
-      const sameCap = String(it.capacitadorId ?? it.CapacitadorId) === String(form.capacitadorId);
+      const sameCap =
+        String(it.capacitadorUsuarioId ?? it.CapacitadorUsuarioId ?? it.capacitadorId ?? it.CapacitadorId) ===
+        String(form.capacitadorId);
       const sameCliente = String(it.clienteId ?? it.ClienteId) === String(form.clienteId);
       return samePeriodo && sameCap && sameCliente;
     });
@@ -154,7 +157,8 @@ export default function AsignacionSemanal({ token }) {
       setError("");
       const payload = {
         periodoId: Number(form.periodoId),
-        capacitadorId: Number(form.capacitadorId),
+        capacitadorId: 0,
+        capacitadorUsuarioId: Number(form.capacitadorId),
         clienteId: Number(form.clienteId),
         regionId: Number(form.regionId),
         observacion: form.observacion,
@@ -169,8 +173,8 @@ export default function AsignacionSemanal({ token }) {
       }
       resetForm();
       load();
-    } catch (e) {
-      setError(e?.message || "No se pudo guardar.");
+    } catch {
+      setError("No se pudo guardar la asignacion semanal.");
     } finally {
       setLoading(false);
     }
@@ -180,7 +184,9 @@ export default function AsignacionSemanal({ token }) {
     setEditing(it);
     setForm({
       periodoId: String(it.periodoId ?? it.PeriodoId ?? ""),
-      capacitadorId: String(it.capacitadorId ?? it.CapacitadorId ?? ""),
+      capacitadorId: String(
+        it.capacitadorUsuarioId ?? it.CapacitadorUsuarioId ?? it.capacitadorId ?? it.CapacitadorId ?? ""
+      ),
       clienteId: String(it.clienteId ?? it.ClienteId ?? ""),
       regionId: String(it.regionId ?? it.RegionId ?? ""),
       observacion: it.observacion ?? it.Observacion ?? "",
@@ -316,7 +322,8 @@ export default function AsignacionSemanal({ token }) {
         !filters.periodoId || String(it.periodoId ?? it.PeriodoId) === String(filters.periodoId);
       const capOk =
         !filters.capacitadorId ||
-        String(it.capacitadorId ?? it.CapacitadorId) === String(filters.capacitadorId);
+        String(it.capacitadorUsuarioId ?? it.CapacitadorUsuarioId ?? it.capacitadorId ?? it.CapacitadorId) ===
+          String(filters.capacitadorId);
       const estadoVal = (it.estado ?? it.Estado ?? "").toString();
       const estadoOk = !filters.estado || estadoVal === filters.estado;
       return periodoOk && capOk && estadoOk;
@@ -497,7 +504,10 @@ export default function AsignacionSemanal({ token }) {
               <View style={styles.listMetaItem}>
                 <Text style={styles.listMetaLabel}>Capacitador</Text>
                 <Text style={styles.listMetaValue}>
-                  {getLabel(capacitadoresItems, it.capacitadorId ?? it.CapacitadorId)}
+                  {getLabel(
+                    capacitadoresItems,
+                    it.capacitadorUsuarioId ?? it.CapacitadorUsuarioId ?? it.capacitadorId ?? it.CapacitadorId
+                  )}
                 </Text>
               </View>
               <View style={styles.listMetaItem}>

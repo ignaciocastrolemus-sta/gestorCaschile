@@ -1,5 +1,6 @@
 ﻿import { API_BASE } from "../config/api";
 const API_URL = `${API_BASE}/AsignacionesSemanales`;
+const LISTADO_URL = `${API_BASE}/AsignacionesSemanales/listado`;
 
 function withAuth(token) {
   return {
@@ -8,7 +9,7 @@ function withAuth(token) {
 }
 
 export async function listarAsignacionesSemanales(token) {
-  const res = await fetch(API_URL, { headers: withAuth(token) });
+  const res = await fetch(LISTADO_URL, { headers: withAuth(token) });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }

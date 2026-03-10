@@ -1,10 +1,5 @@
-export function normalizeText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
+import { normalizeText } from "./textUtils";
+export { normalizeText };
 
 export function resolveTipoResultado(item) {
   const tipoRaw = String(item?.tipoResultado || "").toLowerCase();

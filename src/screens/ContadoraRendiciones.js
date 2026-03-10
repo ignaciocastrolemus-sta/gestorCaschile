@@ -1,14 +1,29 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { useCallback } from "react";
-import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import StatusMessage from "../components/StatusMessage";
 import { isSaldoRendicionValida, normalizeText, resolveSaldoEstado, resolveTipoResultado } from "../utils/saldoUtils";
 import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
-import { obtenerSaldoMovimientos } from "../api/rendiciones";
+import { formatFechaCorta, formatRango, resolveMonthKey, resolveMonthLabel } from "../utils/reportDateUtils";
+import { quickFilterBtn, quickFilterText } from "../utils/quickFilterStyles";
+import {
+  descargarAdjuntoRendicion,
+  justificarPendienteRendicion,
+  levantarJustificacionRendicion,
+  obtenerNotificacionesSaldo,
+  obtenerRendicionesContadora,
+  obtenerRendicionesContadoraPaginadas,
+  obtenerRendicionesJustificadas,
+  obtenerSaldoMovimientos,
+  obtenerSaldos,
+  obtenerSaldosPaginados,
+  registrarSaldoSecretaria,
+  resolverRendicionContadora,
+  revertirSaldoRendicion,
+} from "../api/rendiciones";
 import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { getHiddenNotificationIds, getVisibleNotifications, hideNotifications } from "../utils/notificationUtils";
@@ -79,29 +94,19 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
   const load = useCallback(async (page = 1) => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/contadora/paged?page=${page}&pageSize=${itemsPageSize}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const fallback = await fetch(`${API_BASE}/Rendiciones/contadora`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!fallback.ok) {
-          const txt = await fallback.text();
-          throw new Error(txt || "Error al cargar rendiciones");
-        }
-        const raw = await fallback.json();
+      try {
+        const data = await obtenerRendicionesContadoraPaginadas(token, page, itemsPageSize);
+        setItems(Array.isArray(data?.items) ? data.items : []);
+        setItemsTotal(Number(data?.total || 0));
+        setItemsPage(Number(data?.page || page));
+        setError("");
+      } catch {
+        const raw = await obtenerRendicionesContadora(token);
         setItems(Array.isArray(raw) ? raw : []);
         setItemsTotal(Array.isArray(raw) ? raw.length : 0);
         setItemsPage(1);
         setError("");
-        return;
       }
-      const data = await res.json();
-      setItems(Array.isArray(data?.items) ? data.items : []);
-      setItemsTotal(Number(data?.total || 0));
-      setItemsPage(Number(data?.page || page));
-      setError("");
     } catch (e) {
       setError(e?.message || "Error al cargar rendiciones");
     }
@@ -109,25 +114,15 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
   const loadSaldos = useCallback(async (page = 1) => {
     try {
-      const res = await fetch(
-        `${API_BASE}/Rendiciones/saldos/paged?page=${page}&pageSize=${saldosPageSize}&incluirCerrados=true`,
-        {
-        headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!res.ok) {
-        const fallback = await fetch(`${API_BASE}/Rendiciones/saldos`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!fallback.ok) return;
-        const raw = await fallback.json();
+      try {
+        const data = await obtenerSaldosPaginados(token, page, saldosPageSize, true);
+        setSaldos(Array.isArray(data?.items) ? data.items : []);
+        setSaldosPage(Number(data?.page || page));
+      } catch {
+        const raw = await obtenerSaldos(token);
         setSaldos(Array.isArray(raw) ? raw : []);
         setSaldosPage(1);
-        return;
       }
-      const data = await res.json();
-      setSaldos(Array.isArray(data?.items) ? data.items : []);
-      setSaldosPage(Number(data?.page || page));
     } catch {
       setSaldos([]);
     }
@@ -135,14 +130,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
   const loadJustificadas = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/justificadas`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        setJustificadas([]);
-        return;
-      }
-      const data = await res.json();
+      const data = await obtenerRendicionesJustificadas(token);
       setJustificadas(Array.isArray(data) ? data : []);
     } catch {
       setJustificadas([]);
@@ -151,14 +139,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
   const loadNotificaciones = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/saldos/notificaciones?top=10`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        setNotificaciones([]);
-        return;
-      }
-      const data = await res.json();
+      const data = await obtenerNotificacionesSaldo(token, 10);
       setNotificaciones(Array.isArray(data) ? data : []);
     } catch {
       setNotificaciones([]);
@@ -181,14 +162,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
   const onDownload = async (adjuntoId, filename) => {
     try {
-      const res = await fetch(`${API_BASE}/Rendiciones/adjuntos/${adjuntoId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo descargar");
-      }
-      const blob = await res.blob();
+      const blob = await descargarAdjuntoRendicion(token, adjuntoId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -208,15 +182,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       setResolviendoById((prev) => ({ ...prev, [id]: true }));
       setActionMsg("");
       const mensaje = (msgById[id] || "").trim();
-      const res = await fetch(`${API_BASE}/Rendiciones/${id}/resolver`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ aprobar, mensaje }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Error al resolver rendicion");
-      }
+      await resolverRendicionContadora(token, id, { aprobar, mensaje });
       setItems((prev) => prev.filter((r) => r.id !== id));
       setActionMsg(aprobar ? "Rendicion aprobada." : "Rendicion rechazada.");
       if (aprobar) loadSaldos(saldosPage);
@@ -241,15 +207,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
         observacion,
         fechaHasta: fechaRaw ? `${fechaRaw}T00:00:00` : null,
       };
-      const res = await fetch(`${API_BASE}/Rendiciones/${id}/justificar-pendiente`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo justificar.");
-      }
+      await justificarPendienteRendicion(token, id, payload);
       setActionMsg("Rendicion marcada como pendiente justificada.");
       load(itemsPage);
       loadJustificadas();
@@ -264,15 +222,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     if (levantandoById[id]) return;
     try {
       setLevantandoById((prev) => ({ ...prev, [id]: true }));
-      const res = await fetch(`${API_BASE}/Rendiciones/${id}/levantar-justificacion`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo levantar justificacion.");
-      }
+      await levantarJustificacionRendicion(token, id);
       setActionMsg("Justificacion levantada.");
       load(itemsPage);
       loadJustificadas();
@@ -294,15 +244,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
     try {
       setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: true }));
-      const res = await fetch(`${API_BASE}/Rendiciones/${r.id}/registrar-saldo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ monto, observacion }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo registrar saldo.");
-      }
+      await registrarSaldoSecretaria(token, r.id, { monto, observacion });
       setActionMsg("Saldo registrado correctamente.");
       loadSaldos(saldosPage);
     } catch (e) {
@@ -341,15 +283,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     if (!motivo.trim()) return;
     try {
       setRevirtiendoByMovId((prev) => ({ ...prev, [movimiento.id]: true }));
-      const res = await fetch(`${API_BASE}/Rendiciones/${rendicionId}/revertir-saldo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ movimientoId: movimiento.id, motivo }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "No se pudo revertir.");
-      }
+      await revertirSaldoRendicion(token, rendicionId, { movimientoId: movimiento.id, motivo });
       setActionMsg("Movimiento revertido correctamente.");
       await loadSaldos(saldosPage);
       await loadMovimientos(rendicionId);
@@ -1103,41 +1037,6 @@ function mapCategoriaLabel(value) {
   return value || "Categoria";
 }
 
-function quickFilterBtn(active) {
-  return {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: active ? "#BFD4FF" : "#D9E5FF",
-    backgroundColor: active ? "#E8F0FF" : "#fff",
-  };
-}
-
-function quickFilterText(active) {
-  return { fontWeight: "900", color: active ? "#1D4ED8" : "#374151", fontSize: 12 };
-}
-
-function formatRango(inicio, termino) {
-  if (!inicio || !termino) return "";
-  const start = new Date(inicio);
-  const end = new Date(termino);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
-  const fmt = (d) =>
-    String(d.getDate()).padStart(2, "0") +
-    "/" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "/" +
-    d.getFullYear();
-  return `${fmt(start)} - ${fmt(end)}`;
-}
-
-function formatFechaCorta(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
 function resolveMontoSaldo(item) {
   const dif = Number(item?.diferencia ?? Number(item?.totalRendido || 0) - Number(item?.totalAsignado || 0));
   const pendiente = Number(item?.saldoPendiente || 0);
@@ -1169,21 +1068,6 @@ function resolveContadoraGuidance(r, tipoResultado) {
     badge: "Rendicion cuadrada",
     prompt: "Que hacer ahora: aprobar para cerrar sin saldo pendiente.",
   };
-}
-
-function resolveMonthKey(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function resolveMonthLabel(key) {
-  if (!key || !key.includes("-")) return "Sin mes";
-  const [year, month] = key.split("-");
-  const d = new Date(Number(year), Number(month) - 1, 1);
-  if (Number.isNaN(d.getTime())) return key;
-  return d.toLocaleDateString("es-CL", { month: "long", year: "numeric" });
 }
 
 const styles = StyleSheet.create({

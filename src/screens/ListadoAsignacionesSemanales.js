@@ -4,6 +4,7 @@ import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { COLORS } from "../constants/colors";
 import { Card, Col, Label, Row, SectionTitle, Select } from "../components/UI";
+import { obtenerCapacitadoresUsuarios } from "../api/catalogos";
 
 // Listados generales (asignaciones, periodos, deudores, devoluciones)
 export default function ListadoAsignacionesSemanales({ token }) {
@@ -58,13 +59,13 @@ export default function ListadoAsignacionesSemanales({ token }) {
 
   const loadCatalogos = useCallback(async () => {
     try {
-      const [p, c, cl] = await Promise.all([
+      const [p, cl, caps] = await Promise.all([
         fetch(`${API_BASE}/Periodos`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/Capacitadores`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_BASE}/Clientes`, { headers: { Authorization: `Bearer ${token}` } }),
+        obtenerCapacitadoresUsuarios(token).catch(() => []),
       ]);
       if (p.ok) setPeriodos(await p.json());
-      if (c.ok) setCapacitadores(await c.json());
+      setCapacitadores(Array.isArray(caps) ? caps : []);
       if (cl.ok) setClientes(await cl.json());
     } catch {
       // ignore

@@ -87,3 +87,34 @@ export const apiPost = (endpoint, body, options = {}) => apiRequest(endpoint, { 
 export const apiPut = (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: "PUT", body });
 export const apiDelete = (endpoint, options = {}) => apiRequest(endpoint, { ...options, method: "DELETE" });
 
+export async function apiGetBlob(endpoint, options = {}) {
+  const { token, headers = {}, timeoutMs = 20000, signal } = options;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const mergedSignal = signal || controller.signal;
+
+  try {
+    const res = await fetch(buildUrl(endpoint), {
+      method: "GET",
+      headers: {
+        ...headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: mergedSignal,
+    });
+
+    if (!res.ok) {
+      const bodyText = await res.text();
+      throw new Error(extractErrorMessage(res.status, bodyText, tryParseJson(bodyText)));
+    }
+
+    return await res.blob();
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("Tiempo de espera agotado al conectar con el servidor.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}

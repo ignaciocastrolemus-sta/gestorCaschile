@@ -1,6 +1,7 @@
 ﻿import { API_BASE } from "../config/api";
 // Endpoint base: ViajesGastos
 const API_URL = `${API_BASE}/ViajesGastos`;
+const LEGACY_API_URL = `${API_BASE}/Viajes`;
 
 // Convierte DD/MM/AAAA a YYYY-MM-DD (para backend)
 function toIsoDate(fechaDDMMYYYY) {
@@ -33,14 +34,20 @@ export async function listarViajes() {
 // CREAR viaje
 export async function crearViaje(viaje, token) {
   const payload = normalizeViajePayload(viaje);
-  const res = await fetch(API_URL, {
+  const requestOptions = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(payload),
-  });
+  };
+
+  let res = await fetch(API_URL, requestOptions);
+
+  if (res.status === 404) {
+    res = await fetch(LEGACY_API_URL, requestOptions);
+  }
 
   if (!res.ok) {
     const txt = await res.text();
