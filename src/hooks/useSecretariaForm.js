@@ -20,6 +20,7 @@ export default function useSecretariaForm(authToken) {
   const [tipoViaje, setTipoViaje] = useState("santiago");
   const [regionIdMap, setRegionIdMap] = useState({});
   const [saveMsg, setSaveMsg] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const lastMontosKey = useRef("");
   const montosAbortRef = useRef(null);
 
@@ -28,6 +29,7 @@ export default function useSecretariaForm(authToken) {
     fechaInicio: formatFechaHoy(),
     fechaTermino: formatFechaHoy(),
     capacitador: "",
+    capacitadorUsuarioId: "",
     jefe: "",
     region: tipo === "santiago" ? "Metropolitana de Santiago" : "",
     comuna: "",
@@ -153,6 +155,7 @@ export default function useSecretariaForm(authToken) {
   };
 
   const onGuardar = async () => {
+    if (isSaving) return;
     const error = validarFormulario();
     if (error) {
       Alert.alert("Revisa el formulario", error);
@@ -168,6 +171,7 @@ export default function useSecretariaForm(authToken) {
       fechaInicio: form.fechaInicio,
       fechaTermino: form.fechaTermino,
       capacitador: form.capacitador,
+      capacitadorUsuarioId: form.capacitadorUsuarioId ? Number(form.capacitadorUsuarioId) : null,
       jefe: form.jefe,
       tipoViaje: tipoViaje === "santiago" ? "Santiago" : "Regiones",
       region: form.region,
@@ -189,6 +193,7 @@ export default function useSecretariaForm(authToken) {
     };
 
     try {
+      setIsSaving(true);
       await crearViaje(payload, authToken);
       Alert.alert("Guardado", "Datos guardados.");
       setSaveMsg("Guardado.");
@@ -198,6 +203,8 @@ export default function useSecretariaForm(authToken) {
     } catch (error) {
       Alert.alert("Error", error?.message || "No se pudo guardar.");
       setSaveMsg("Error al guardar.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -289,6 +296,7 @@ export default function useSecretariaForm(authToken) {
     form,
     setForm,
     saveMsg,
+    isSaving,
     updateFormConFechas,
     updateNumero,
     onFechaInicioSelect,

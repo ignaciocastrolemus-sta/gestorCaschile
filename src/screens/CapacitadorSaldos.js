@@ -6,7 +6,7 @@ import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import StatusMessage from "../components/StatusMessage";
-import { getVisibleNotifications } from "../utils/notificationUtils";
+import { getHiddenNotificationIds, getVisibleNotifications, hideNotifications } from "../utils/notificationUtils";
 
 const fmtMoney = (n) => `$ ${Number(n || 0).toLocaleString("es-CL")}`;
 const fmtDate = (value) => {
@@ -57,6 +57,7 @@ const pickComprobanteWeb = () =>
 export default function CapacitadorSaldos({ token }) {
   const [items, setItems] = useState([]);
   const [notificaciones, setNotificaciones] = useState([]);
+  const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("capacitador"));
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [showNovedades, setShowNovedades] = useState(true);
@@ -220,7 +221,10 @@ export default function CapacitadorSaldos({ token }) {
     return Array.from(map.entries()).map(([capacitador, rows]) => ({ capacitador, rows }));
   }, [items]);
 
-  const visibleNotificaciones = useMemo(() => getVisibleNotifications(notificaciones), [notificaciones]);
+  const visibleNotificaciones = useMemo(
+    () => getVisibleNotifications(notificaciones, hiddenNotiIds),
+    [notificaciones, hiddenNotiIds]
+  );
 
   useEffect(() => {
     setOpenByCap((prev) => {
@@ -256,9 +260,17 @@ export default function CapacitadorSaldos({ token }) {
       <View style={dash.panel}>
         <View style={styles.panelHeadRow}>
           <Text style={dash.panelTitle}>Novedades de saldos</Text>
-          <Pressable style={styles.btn} onPress={() => setShowNovedades((v) => !v)}>
-            <Text style={styles.btnText}>{showNovedades ? "Ocultar" : "Mostrar"}</Text>
-          </Pressable>
+          <View style={styles.headActions}>
+            <Pressable style={styles.btn} onPress={() => setShowNovedades((v) => !v)}>
+              <Text style={styles.btnText}>{showNovedades ? "Ocultar" : "Mostrar"}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.btn}
+              onPress={() => setHiddenNotiIds(hideNotifications("capacitador", visibleNotificaciones))}
+            >
+              <Text style={styles.btnText}>Marcar todo leido</Text>
+            </Pressable>
+          </View>
         </View>
         {!showNovedades ? (
           <Text style={styles.empty}>Panel contraido. Tienes {visibleNotificaciones.length} notificacion(es).</Text>
@@ -338,8 +350,14 @@ export default function CapacitadorSaldos({ token }) {
                     </View>
                   ) : null}
                 </View>
-                <Pressable style={styles.btn} onPress={() => onToggleMovimientos(r.id)}>
-                  <Text style={styles.btnText}>{openById[r.id] ? "Ocultar historial" : "Ver historial"}</Text>
+                <Pressable
+                  style={[styles.btn, loadingById[r.id] && { opacity: 0.7 }]}
+                  onPress={() => onToggleMovimientos(r.id)}
+                  disabled={!!loadingById[r.id]}
+                >
+                  <Text style={styles.btnText}>
+                    {loadingById[r.id] ? "Cargando..." : openById[r.id] ? "Ocultar historial" : "Ver historial"}
+                  </Text>
                 </Pressable>
                 {mostrarAccion ? (
                   formById[r.id] ? (
@@ -421,6 +439,7 @@ export default function CapacitadorSaldos({ token }) {
 const styles = StyleSheet.create({
   empty: { color: COLORS.muted, fontWeight: "700" },
   panelHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headActions: { flexDirection: "row", gap: 8 },
   capGroup: {
     borderTopWidth: 1,
     borderTopColor: COLORS.grayBorder,

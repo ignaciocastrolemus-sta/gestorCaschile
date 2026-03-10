@@ -2,7 +2,6 @@
 import { API_BASE } from "../config/api";
 import { ScrollView, View, Text, Pressable, Alert, TextInput, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
@@ -13,8 +12,22 @@ import { obtenerSaldoMovimientos } from "../api/rendiciones";
 import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 
+function MaterialCommunityIcons({ name, size = 12, color = "#1D4ED8" }) {
+  const glyphByName = {
+    send: "✈",
+    paperclip: "📎",
+    "file-document-edit-outline": "📝",
+    "account-outline": "👤",
+    "map-marker-outline": "📍",
+    "calendar-range": "📅",
+  };
+  return <Text style={{ fontSize: size, color }}>{glyphByName[name] || "•"}</Text>;
+}
+
 // Secretaria: rendiciones recibidas y envio a contadora.
 export default function CarpetaViajes({ token, viewMode = "all" }) {
+  const { width } = useWindowDimensions();
+  const compactUi = width < 1200;
   const [items, setItems] = useState([]);
   const [saldos, setSaldos] = useState([]);
   const [itemsPage, setItemsPage] = useState(1);
@@ -163,6 +176,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     if (sendingContadoraById[id]) return;
     try {
       setSendingContadoraById((prev) => ({ ...prev, [id]: true }));
+      setError("");
       setInfo("");
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/enviar-contadora`, {
         method: "POST",
@@ -178,7 +192,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       loadSaldos(saldosPage);
       loadJustificadas();
     } catch (e) {
-      setInfo(e?.message || "No se pudo enviar.");
+      setError(e?.message || "No se pudo enviar.");
     } finally {
       setSendingContadoraById((prev) => ({ ...prev, [id]: false }));
     }
@@ -192,6 +206,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     const observacion = typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "") || "" : "";
     try {
       setJustifyingById((prev) => ({ ...prev, [id]: true }));
+      setError("");
+      setInfo("");
       const payload = {
         motivo,
         observacion,
@@ -210,7 +226,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       load(itemsPage);
       loadJustificadas();
     } catch (e) {
-      setInfo(e?.message || "No se pudo justificar.");
+      setError(e?.message || "No se pudo justificar.");
     } finally {
       setJustifyingById((prev) => ({ ...prev, [id]: false }));
     }
@@ -220,6 +236,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
     if (liftingById[id]) return;
     try {
       setLiftingById((prev) => ({ ...prev, [id]: true }));
+      setError("");
+      setInfo("");
       const res = await fetch(`${API_BASE}/Rendiciones/${id}/levantar-justificacion`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -233,7 +251,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       load(itemsPage);
       loadJustificadas();
     } catch (e) {
-      setInfo(e?.message || "No se pudo levantar justificacion.");
+      setError(e?.message || "No se pudo levantar justificacion.");
     } finally {
       setLiftingById((prev) => ({ ...prev, [id]: false }));
     }
@@ -249,6 +267,8 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       typeof window !== "undefined" ? window.prompt("Observacion (opcional)", "Registro de saldo") || "" : "";
     try {
       setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: true }));
+      setError("");
+      setInfo("");
       const res = await fetch(`${API_BASE}/Rendiciones/${r.id}/registrar-saldo`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -261,7 +281,7 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
       setInfo("Saldo registrado correctamente.");
       loadSaldos(saldosPage);
     } catch (e) {
-      setInfo(e?.message || "No se pudo registrar saldo.");
+      setError(e?.message || "No se pudo registrar saldo.");
     } finally {
       setRegistrandoSaldoById((prev) => ({ ...prev, [r.id]: false }));
     }
@@ -767,11 +787,16 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                               </View>
                             )}
                             <Pressable
-                              style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
+                              style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }, movLoadingById[r.id] && { opacity: 0.7 }]}
                               onPress={() => onToggleMovimientos(r.id)}
+                              disabled={!!movLoadingById[r.id]}
                             >
                               <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>
-                                {movOpenById[r.id] ? "Ocultar movimientos" : "Ver movimientos"}
+                                {movLoadingById[r.id]
+                                  ? "Cargando..."
+                                  : movOpenById[r.id]
+                                    ? compactUi ? "Ocultar" : "Ocultar movimientos"
+                                    : compactUi ? "Movimientos" : "Ver movimientos"}
                               </Text>
                             </Pressable>
                           </View>
@@ -826,13 +851,13 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
             style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
             onPress={() => onExportHistorial("excel")}
           >
-            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Descargar Excel</Text>
+            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>{compactUi ? "Excel" : "Descargar Excel"}</Text>
           </Pressable>
           <Pressable
             style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
             onPress={() => onExportHistorial("pdf")}
           >
-            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>Descargar PDF</Text>
+            <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>{compactUi ? "PDF" : "Descargar PDF"}</Text>
           </Pressable>
         </View>
         {saldosCerradosFiltrados.length === 0 ? (
@@ -865,11 +890,16 @@ export default function CarpetaViajes({ token, viewMode = "all" }) {
                             </Text>
                           </View>
                           <Pressable
-                            style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }]}
+                            style={[dash.docBtn, { backgroundColor: "#EEF3FF", borderWidth: 1, borderColor: "#D9E5FF" }, movLoadingById[r.id] && { opacity: 0.7 }]}
                             onPress={() => onToggleMovimientos(r.id)}
+                            disabled={!!movLoadingById[r.id]}
                           >
                             <Text style={[dash.docBtnText, { color: "#1D4ED8" }]}>
-                              {movOpenById[r.id] ? "Ocultar movimientos" : "Ver movimientos"}
+                              {movLoadingById[r.id]
+                                ? "Cargando..."
+                                : movOpenById[r.id]
+                                  ? compactUi ? "Ocultar" : "Ocultar movimientos"
+                                  : compactUi ? "Movimientos" : "Ver movimientos"}
                             </Text>
                           </Pressable>
                         </View>
@@ -1019,10 +1049,14 @@ function ViajeRowCard({ data, token, onEnviar, onJustificar, sending = false, ju
             {sending ? " Enviando..." : " Enviar a contadora"}
           </Text>
         </Pressable>
-        <Pressable style={[dash.docBtn, rowCardStyles.actionBtn]} onPress={onToggleAdjuntos}>
+        <Pressable
+          style={[dash.docBtn, rowCardStyles.actionBtn, adjuntosLoading && { opacity: 0.7 }]}
+          onPress={onToggleAdjuntos}
+          disabled={adjuntosLoading}
+        >
           <Text style={dash.docBtnText}>
             <MaterialCommunityIcons name="paperclip" size={12} color="#fff" />
-            {adjuntosOpen ? " Ocultar adjuntos" : " Ver adjuntos"}
+            {adjuntosLoading ? " Cargando adjuntos..." : adjuntosOpen ? " Ocultar adjuntos" : " Ver adjuntos"}
           </Text>
         </Pressable>
         <Pressable

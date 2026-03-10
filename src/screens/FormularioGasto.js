@@ -7,7 +7,7 @@ import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import { logWarn } from "../utils/logger";
 import {
-  obtenerCapacitadores,
+  obtenerCapacitadoresUsuarios,
   obtenerComunas,
   obtenerJefesProyecto,
   obtenerRegiones,
@@ -27,6 +27,7 @@ export default function FormularioGasto({
   onToggleNoAplica,
   onChangeTipoViaje,
   saveMsg,
+  isSaving = false,
 }) {
   const [regiones, setRegiones] = React.useState([]);
   const [comunasPorRegion, setComunasPorRegion] = React.useState({});
@@ -42,10 +43,10 @@ export default function FormularioGasto({
       };
     (async () => {
       try {
-        const [regionesRes, comunasRes, capsRes, jefesRes] = await Promise.all([
+        const [regionesRes, comunasRes, capsUsersRes, jefesRes] = await Promise.all([
           obtenerRegiones(token),
           obtenerComunas(token),
-          obtenerCapacitadores(token),
+          obtenerCapacitadoresUsuarios(token).catch(() => []),
           obtenerJefesProyecto(token),
         ]);
 
@@ -79,10 +80,14 @@ export default function FormularioGasto({
 
         setRegiones(regionesNombres);
         setComunasPorRegion(comunasMap);
-        const capsNombres = Array.isArray(capsRes)
-          ? capsRes
-              .map((c) => c?.nombre ?? c?.Nombre ?? c)
-              .filter((c) => typeof c === "string" && c.trim().length > 0)
+        const capsUsers = Array.isArray(capsUsersRes)
+          ? capsUsersRes
+              .map((c) => ({
+                id: c?.id ?? null,
+                nombre: String(c?.nombre || "").trim(),
+                email: String(c?.email || "").trim(),
+              }))
+              .filter((c) => c.nombre)
           : [];
         const jefesNombres = Array.isArray(jefesRes)
           ? jefesRes
@@ -90,7 +95,7 @@ export default function FormularioGasto({
               .filter((j) => typeof j === "string" && j.trim().length > 0)
           : [];
 
-        setCapacitadores(capsNombres);
+        setCapacitadores(capsUsers);
         setJefesProyecto(jefesNombres);
       } catch (err) {
         logWarn("Catalogos: error al cargar", err);
@@ -243,7 +248,7 @@ export default function FormularioGasto({
     c.toLowerCase().includes((form.comuna || "").toLowerCase())
   );
   const capacitadoresFiltrados = capacitadores.filter((c) =>
-    c.toLowerCase().includes((form.capacitador || "").toLowerCase())
+    String(c?.nombre || "").toLowerCase().includes((form.capacitador || "").toLowerCase())
   );
   const jefesFiltrados = jefesProyecto.filter((c) =>
     c.toLowerCase().includes((form.jefe || "").toLowerCase())
@@ -253,8 +258,11 @@ export default function FormularioGasto({
     const normalized = value.trim().toLowerCase();
     return list.some((item) => item.toLowerCase() === normalized);
   };
+  const capacitadorNombres = capacitadores.map((c) => String(c?.nombre || ""));
   const showCapacitadores =
-    !!form.capacitador && capacitadoresFiltrados.length > 0 && !isExactMatch(form.capacitador, capacitadores);
+    (form.capacitador || "").trim().length >= 2 &&
+    capacitadoresFiltrados.length > 0 &&
+    !isExactMatch(form.capacitador, capacitadorNombres);
   const showJefes = !!form.jefe && jefesFiltrados.length > 0 && !isExactMatch(form.jefe, jefesProyecto);
   const showRegiones =
     tipo === "regiones" &&
@@ -313,18 +321,27 @@ export default function FormularioGasto({
             label="Capacitador"
             placeholder="Seleccionar..."
             value={form.capacitador}
-            onChangeText={(value) => onTextChange("capacitador", value)}
+            onChangeText={(value) => {
+              onTextChange("capacitador", value);
+              onTextChange("capacitadorUsuarioId", "");
+            }}
           />
         </View>
         {showCapacitadores && (
           <View style={dash.suggestBox}>
-            {capacitadoresFiltrados.slice(0, 6).map((item) => (
+            {capacitadoresFiltrados.slice(0, 5).map((item) => (
               <Pressable
-                key={item}
+                key={`${item.nombre}-${item.id ?? "x"}`}
                 style={dash.suggestItem}
-                onPress={() => onTextChange("capacitador", item)}
+                onPress={() => {
+                  onTextChange("capacitador", item.nombre);
+                  onTextChange("capacitadorUsuarioId", item.id ? String(item.id) : "");
+                }}
               >
-                <Text style={dash.suggestText}>{item}</Text>
+                <Text style={dash.suggestText}>
+                  {item.nombre}
+                  {item.email ? ` (${item.email})` : ""}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -577,8 +594,12 @@ export default function FormularioGasto({
           />
         </View>
 
-        <Pressable style={dash.saveBtn} onPress={onSave}>
-          <Text style={dash.saveText}>Guardar</Text>
+        <Pressable
+          style={[dash.saveBtn, isSaving && { opacity: 0.7 }]}
+          onPress={onSave}
+          disabled={isSaving}
+        >
+          <Text style={dash.saveText}>{isSaving ? "Enviando..." : "Enviar"}</Text>
         </Pressable>
         {!!saveMsg && <Text style={dash.saveMsg}>{saveMsg}</Text>}
       </View>

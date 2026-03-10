@@ -6,12 +6,18 @@ import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
 import ContadoraRendiciones from "./ContadoraRendiciones";
 import { API_BASE } from "../config/api";
-import { getRecentVisibleNotificationCount, getVisibleNotifications } from "../utils/notificationUtils";
+import {
+  getHiddenNotificationIds,
+  getRecentVisibleNotificationCount,
+  getVisibleNotifications,
+  hideNotifications,
+} from "../utils/notificationUtils";
 
 // Contadora: revisión de rendiciones
 export default function ContadoraHome({ onLogout, token, embedded = false }) {
   const [activeMenu, setActiveMenu] = useState("rendiciones");
   const [notificaciones, setNotificaciones] = useState([]);
+  const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("contadora"));
   const [showNotiModal, setShowNotiModal] = useState(false);
 
   const loadNotificaciones = useCallback(async () => {
@@ -37,10 +43,13 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
     return () => clearInterval(timer);
   }, [token, loadNotificaciones]);
 
-  const visibleNotificaciones = useMemo(() => getVisibleNotifications(notificaciones), [notificaciones]);
+  const visibleNotificaciones = useMemo(
+    () => getVisibleNotifications(notificaciones, hiddenNotiIds),
+    [notificaciones, hiddenNotiIds]
+  );
   const badgeCount = useMemo(
-    () => getRecentVisibleNotificationCount(notificaciones, 3),
-    [notificaciones]
+    () => getRecentVisibleNotificationCount(notificaciones, 3, hiddenNotiIds),
+    [notificaciones, hiddenNotiIds]
   );
 
   if (embedded) {
@@ -104,6 +113,12 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <Pressable style={dash.docBtn} onPress={loadNotificaciones}>
                   <Text style={dash.docBtnText}>Actualizar</Text>
+                </Pressable>
+                <Pressable
+                  style={dash.docBtn}
+                  onPress={() => setHiddenNotiIds(hideNotifications("contadora", visibleNotificaciones))}
+                >
+                  <Text style={dash.docBtnText}>Marcar todo leido</Text>
                 </Pressable>
                 <Pressable style={dash.docBtn} onPress={() => setShowNotiModal(false)}>
                   <Text style={dash.docBtnText}>Cerrar</Text>

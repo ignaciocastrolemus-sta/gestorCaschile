@@ -9,7 +9,12 @@ import AsignacionSemanal from "./AsignacionSemanal";
 import TransferenciasSecretaria from "./TransferenciasSecretaria";
 import EncuadreRendiciones from "./EncuadreRendiciones";
 import { API_BASE } from "../config/api";
-import { getRecentVisibleNotificationCount, getVisibleNotifications } from "../utils/notificationUtils";
+import {
+  getHiddenNotificationIds,
+  getRecentVisibleNotificationCount,
+  getVisibleNotifications,
+  hideNotifications,
+} from "../utils/notificationUtils";
 
 export default function SecretariaLayout({
   onLogout,
@@ -26,8 +31,10 @@ export default function SecretariaLayout({
   onToggleNoAplica,
   onChangeTipoViaje,
   saveMsg,
+  isSaving,
 }) {
   const [notificaciones, setNotificaciones] = useState([]);
+  const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("secretaria"));
   const [showNotiModal, setShowNotiModal] = useState(false);
 
   const loadNotificaciones = useCallback(async () => {
@@ -53,10 +60,13 @@ export default function SecretariaLayout({
     return () => clearInterval(timer);
   }, [authToken, loadNotificaciones]);
 
-  const visibleNotificaciones = useMemo(() => getVisibleNotifications(notificaciones), [notificaciones]);
+  const visibleNotificaciones = useMemo(
+    () => getVisibleNotifications(notificaciones, hiddenNotiIds),
+    [notificaciones, hiddenNotiIds]
+  );
   const badgeCount = useMemo(
-    () => getRecentVisibleNotificationCount(notificaciones, 3),
-    [notificaciones]
+    () => getRecentVisibleNotificationCount(notificaciones, 3, hiddenNotiIds),
+    [notificaciones, hiddenNotiIds]
   );
 
   return (
@@ -149,6 +159,7 @@ export default function SecretariaLayout({
               onToggleNoAplica={onToggleNoAplica}
               onChangeTipoViaje={onChangeTipoViaje}
               saveMsg={saveMsg}
+              isSaving={isSaving}
               token={authToken}
             />
           )}
@@ -163,6 +174,12 @@ export default function SecretariaLayout({
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <Pressable style={dash.docBtn} onPress={loadNotificaciones}>
                   <Text style={dash.docBtnText}>Actualizar</Text>
+                </Pressable>
+                <Pressable
+                  style={dash.docBtn}
+                  onPress={() => setHiddenNotiIds(hideNotifications("secretaria", visibleNotificaciones))}
+                >
+                  <Text style={dash.docBtnText}>Marcar todo leido</Text>
                 </Pressable>
                 <Pressable style={dash.docBtn} onPress={() => setShowNotiModal(false)}>
                   <Text style={dash.docBtnText}>Cerrar</Text>

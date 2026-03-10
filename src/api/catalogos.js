@@ -30,10 +30,24 @@ export async function obtenerComunas(token) {
   return filtrarActivos(data);
 }
 
-// Catalogo: capacitadores
-export async function obtenerCapacitadores(token) {
-  const data = await fetchJson(`${API_BASE}/Capacitadores`, token);
-  return filtrarActivos(data);
+// Usuarios capacitadores desde UsuariosController.
+export async function obtenerCapacitadoresUsuarios(token) {
+  const data = await fetchJson(`${API_BASE}/Usuarios/capacitadores`, token);
+  const rows = filtrarActivos(data);
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .filter((u) => {
+      const rol = String(u?.rolNombre ?? u?.RolNombre ?? "").trim().toLowerCase();
+      const rolId = Number(u?.rolId ?? u?.RolId ?? 0);
+      return rolId === 2 || rol === "usuario terreno" || rol === "capacitador";
+    })
+    .map((u) => ({
+      id: u?.id ?? u?.Id ?? null,
+      nombre: String(u?.nombre ?? u?.Nombre ?? "").trim(),
+      email: String(u?.email ?? u?.Email ?? "").trim(),
+    }))
+    .filter((u) => u.nombre);
 }
 
 // Catalogo: jefes de proyecto

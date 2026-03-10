@@ -50,6 +50,7 @@ export default function App() {
     tipoViaje,
     form,
     saveMsg,
+    isSaving,
     updateFormConFechas,
     updateNumero,
     onFechaInicioSelect,
@@ -94,6 +95,7 @@ export default function App() {
         onToggleNoAplica={(campoFlag, campoValor) => toggleNoAsignacion(campoFlag, campoValor)}
         onChangeTipoViaje={onChangeTipoViaje}
         saveMsg={saveMsg}
+        isSaving={isSaving}
       />
     );
   }

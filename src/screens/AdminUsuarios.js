@@ -9,6 +9,39 @@ import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 
+const BANCOS_CHILE = [
+  "Banco de Chile",
+  "BancoEstado",
+  "Banco Santander",
+  "Banco BCI",
+  "Banco Itaú",
+  "Banco Scotiabank",
+  "Banco Falabella",
+  "Banco Ripley",
+  "Banco Consorcio",
+  "Banco Security",
+  "Banco Internacional",
+  "Banco BICE",
+  "Banco BTG Pactual Chile",
+  "Banco Edwards",
+  "Banco do Brasil",
+  "Banco Penta",
+  "Banco Corpbanca",
+  "Banco Paris",
+  "Banco Coopeuch",
+  "Banco BBVA",
+  "Banco Rabobank",
+  "Banco HSBC",
+];
+
+const TIPOS_CUENTA = [
+  "Cuenta Corriente",
+  "Cuenta Vista",
+  "Cuenta RUT",
+  "Cuenta de Ahorro",
+  "Cuenta Credito",
+];
+
 // Admin Usuarios: crear/editar/desactivar usuarios y asignar rol
 
 export default function AdminUsuarios({ token, title }) {
@@ -20,38 +53,6 @@ export default function AdminUsuarios({ token, title }) {
     "Usuario Terreno": { hint: "Ingresa gastos", color: "#5F6B7A" },
   };
   const roleDisplayName = (roleName) => (roleName === "Usuario Terreno" ? "Capacitador" : roleName || "Sin rol");
-  const BANCOS_CHILE = [
-    "Banco de Chile",
-    "BancoEstado",
-    "Banco Santander",
-    "Banco BCI",
-    "Banco Itaú",
-    "Banco Scotiabank",
-    "Banco Falabella",
-    "Banco Ripley",
-    "Banco Consorcio",
-    "Banco Security",
-    "Banco Internacional",
-    "Banco BICE",
-    "Banco BTG Pactual Chile",
-    "Banco Edwards",
-    "Banco do Brasil",
-    "Banco Penta",
-    "Banco Corpbanca",
-    "Banco Paris",
-    "Banco Coopeuch",
-    "Banco BBVA",
-    "Banco Rabobank",
-    "Banco HSBC",
-  ];
-  const TIPOS_CUENTA = [
-    "Cuenta Corriente",
-    "Cuenta Vista",
-    "Cuenta RUT",
-    "Cuenta de Ahorro",
-    "Cuenta Credito",
-  ];
-
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
   const [error, setError] = useState("");

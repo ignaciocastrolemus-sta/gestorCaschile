@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, Pressable, StyleSheet, Alert, Modal, TextInput } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet, Alert, Modal, TextInput, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { COLORS } from "../constants/colors";
 import { Card } from "../components/UI";
@@ -108,6 +108,11 @@ const csvCell = (value) => {
 };
 
 export default function EncuadreRendiciones({ token }) {
+  const { width } = useWindowDimensions();
+  const compactTable = width < 1400;
+  const tableCols = compactTable
+    ? { rendicion: 2, reembolso: 1, combustible: 0.9, asignado: 1.1, rendido: 1.1, saldo: 1, estado: 1, acciones: 1.3 }
+    : { rendicion: 2.1, reembolso: 1.1, combustible: 1, asignado: 1.2, rendido: 1.2, saldo: 1.1, estado: 1.1, acciones: 1.6 };
   const today = new Date();
   const defaultMes = String(today.getMonth() + 1).padStart(2, "0");
   const defaultAnio = String(today.getFullYear());
@@ -144,7 +149,7 @@ export default function EncuadreRendiciones({ token }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [modalMode, setModalMode] = useState("detalle");
 
-  // Mantiene la consulta base al backend y deja los filtros rÃ¡pidos en frontend.
+  // Mantiene la consulta base al backend y deja los filtros rapidos  en frontend.
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -691,16 +696,16 @@ export default function EncuadreRendiciones({ token }) {
       ) : (
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <ScrollView horizontal showsHorizontalScrollIndicator>
-            <View style={styles.tableMinWidth}>
+            <View style={[styles.tableMinWidth, compactTable && styles.tableMinWidthCompact]}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.th, { flex: 2.1 }]}>Rendicion</Text>
-                <Text style={[styles.th, { flex: 1.1 }]}>Reembolso para</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Combustible</Text>
-                <Text style={[styles.th, { flex: 1.2 }]}>Asignado</Text>
-                <Text style={[styles.th, { flex: 1.2 }]}>Rendido</Text>
-                <Text style={[styles.th, { flex: 1.1 }]}>Saldo actual</Text>
-                <Text style={[styles.th, { flex: 1.1 }]}>Estado</Text>
-                <Text style={[styles.th, { flex: 1.6, textAlign: "left" }]}>Acciones</Text>
+                <Text style={[styles.th, { flex: tableCols.rendicion }]}>Rendicion</Text>
+                <Text style={[styles.th, { flex: tableCols.reembolso }]}>Reembolso para</Text>
+                <Text style={[styles.th, { flex: tableCols.combustible }]}>Combustible</Text>
+                <Text style={[styles.th, { flex: tableCols.asignado }]}>Asignado</Text>
+                <Text style={[styles.th, { flex: tableCols.rendido }]}>Rendido</Text>
+                <Text style={[styles.th, { flex: tableCols.saldo }]}>Saldo actual</Text>
+                <Text style={[styles.th, { flex: tableCols.estado }]}>Estado</Text>
+                <Text style={[styles.th, { flex: tableCols.acciones, textAlign: "left" }]}>Acciones</Text>
               </View>
 
               {itemsPaginadosConGrupo.map((it) => {
@@ -721,7 +726,7 @@ export default function EncuadreRendiciones({ token }) {
                       estadoVisual.key === "exceso" ? styles.rowDanger : null,
                     ]}
                   >
-                    <View style={{ flex: 2.1 }}>
+                    <View style={{ flex: tableCols.rendicion }}>
                       <Text style={styles.rowTitle}>
                         #{it.id} - {it?.viaje?.municipio || "-"}
                       </Text>
@@ -731,13 +736,13 @@ export default function EncuadreRendiciones({ token }) {
                       </Text>
                     </View>
 
-                    <Text style={[styles.td, { flex: 1.1 }]}>{getReembolsoPara(it)}</Text>
-                    <Text style={[styles.td, { flex: 1 }]}>$ {fmtMoney(getCombustible(it))}</Text>
-                    <Text style={[styles.td, { flex: 1.2 }]}>$ {fmtMoney(it.totalAsignado)}</Text>
-                    <Text style={[styles.td, { flex: 1.2 }]}>$ {fmtMoney(it.totalRendido)}</Text>
-                    <Text style={[styles.td, { flex: 1.1 }]}>$ {fmtMoney(saldoActual)}</Text>
+                    <Text style={[styles.td, { flex: tableCols.reembolso }]}>{getReembolsoPara(it)}</Text>
+                    <Text style={[styles.td, { flex: tableCols.combustible }]}>$ {fmtMoney(getCombustible(it))}</Text>
+                    <Text style={[styles.td, { flex: tableCols.asignado }]}>$ {fmtMoney(it.totalAsignado)}</Text>
+                    <Text style={[styles.td, { flex: tableCols.rendido }]}>$ {fmtMoney(it.totalRendido)}</Text>
+                    <Text style={[styles.td, { flex: tableCols.saldo }]}>$ {fmtMoney(saldoActual)}</Text>
 
-                    <View style={{ flex: 1.1 }}>
+                    <View style={{ flex: tableCols.estado }}>
                       <View style={[styles.statusPill, { backgroundColor: estadoVisual.bg }]}>
                         <Text style={[styles.statusText, { color: estadoVisual.color }]}>
                           {estadoVisual.label}
@@ -745,12 +750,12 @@ export default function EncuadreRendiciones({ token }) {
                       </View>
                     </View>
 
-                    <View style={[styles.rowActions, { flex: 1.6 }]}>
+                    <View style={[styles.rowActions, { flex: tableCols.acciones }]}>
                       <Pressable style={styles.actionBtn} onPress={() => openItemModal(it, "detalle")}>
-                        <Text style={styles.actionText}>Ver detalle</Text>
+                        <Text style={styles.actionText}>{compactTable ? "Detalle" : "Ver detalle"}</Text>
                       </Pressable>
                       <Pressable style={styles.actionBtn} onPress={() => openItemModal(it, "rendicion")}>
-                        <Text style={styles.actionText}>Ver rendicion</Text>
+                        <Text style={styles.actionText}>{compactTable ? "Rendicion" : "Ver rendicion"}</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -976,6 +981,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFF",
   },
   tableMinWidth: { minWidth: 1300 },
+  tableMinWidthCompact: { minWidth: 1120 },
   th: {
     fontSize: 12,
     fontWeight: "900",

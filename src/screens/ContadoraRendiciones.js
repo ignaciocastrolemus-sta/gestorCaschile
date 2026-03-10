@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
@@ -11,10 +11,12 @@ import { groupRendicionesByCapacitador } from "../utils/rendicionGrouping";
 import { obtenerSaldoMovimientos } from "../api/rendiciones";
 import { exportReportExcel, exportReportPdf } from "../utils/reportExport";
 import useDebouncedValue from "../hooks/useDebouncedValue";
-import { getVisibleNotifications } from "../utils/notificationUtils";
+import { getHiddenNotificationIds, getVisibleNotifications, hideNotifications } from "../utils/notificationUtils";
 
 // Contadora: lista de rendiciones y resolucion (aprobar/rechazar)
 export default function ContadoraRendiciones({ token, viewMode = "all" }) {
+  const { width } = useWindowDimensions();
+  const compactUi = width < 1200;
   const [items, setItems] = useState([]);
   const [saldos, setSaldos] = useState([]);
   const [itemsPage, setItemsPage] = useState(1);
@@ -43,8 +45,12 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [levantandoById, setLevantandoById] = useState({});
   const [registrandoSaldoById, setRegistrandoSaldoById] = useState({});
   const [notificaciones, setNotificaciones] = useState([]);
+  const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("contadora"));
   const [showNotificaciones, setShowNotificaciones] = useState(false);
-  const visibleNotificaciones = useMemo(() => getVisibleNotifications(notificaciones), [notificaciones]);
+  const visibleNotificaciones = useMemo(
+    () => getVisibleNotifications(notificaciones, hiddenNotiIds),
+    [notificaciones, hiddenNotiIds]
+  );
 
   // Resumen rapido para priorizar revision.
   const kpis = useMemo(() => {
@@ -564,6 +570,12 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
           <Pressable style={styles.historyBtn} onPress={() => setShowNotificaciones((v) => !v)}>
             <Text style={styles.historyBtnText}>{showNotificaciones ? "Ocultar" : "Mostrar"}</Text>
           </Pressable>
+          <Pressable
+            style={styles.historyBtn}
+            onPress={() => setHiddenNotiIds(hideNotifications("contadora", visibleNotificaciones))}
+          >
+            <Text style={styles.historyBtnText}>Marcar todo leido</Text>
+          </Pressable>
         </View>
         {!showNotificaciones ? (
           <Text style={styles.detailHint}>Panel contraido.</Text>
@@ -708,8 +720,18 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                                 <Text style={styles.saldoClosedText}>Saldo cerrado</Text>
                               </View>
                             )}
-                            <Pressable style={[styles.historyBtn, styles.saldoActionBtn]} onPress={() => onToggleMovimientos(r.id)}>
-                              <Text style={styles.historyBtnText}>{movOpenById[r.id] ? "Ocultar movimientos" : "Ver movimientos"}</Text>
+                            <Pressable
+                              style={[styles.historyBtn, styles.saldoActionBtn, movLoadingById[r.id] && { opacity: 0.7 }]}
+                              onPress={() => onToggleMovimientos(r.id)}
+                              disabled={!!movLoadingById[r.id]}
+                            >
+                              <Text style={styles.historyBtnText}>
+                                {movLoadingById[r.id]
+                                  ? "Cargando..."
+                                  : movOpenById[r.id]
+                                    ? compactUi ? "Ocultar" : "Ocultar movimientos"
+                                    : compactUi ? "Movimientos" : "Ver movimientos"}
+                              </Text>
                             </Pressable>
                           </View>
                         </View>
@@ -800,10 +822,10 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
             })}
           </ScrollView>
           <Pressable style={styles.historyBtn} onPress={() => onExportHistorial("excel")}>
-            <Text style={styles.historyBtnText}>Descargar Excel</Text>
+            <Text style={styles.historyBtnText}>{compactUi ? "Excel" : "Descargar Excel"}</Text>
           </Pressable>
           <Pressable style={styles.historyBtn} onPress={() => onExportHistorial("pdf")}>
-            <Text style={styles.historyBtnText}>Descargar PDF</Text>
+            <Text style={styles.historyBtnText}>{compactUi ? "PDF" : "Descargar PDF"}</Text>
           </Pressable>
         </View>
         {saldosCerradosFiltrados.length === 0 ? (
@@ -838,9 +860,17 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                               {tipo} cerrado | Monto: $ {monto.toLocaleString("es-CL")} | Fecha: {fecha}
                             </Text>
                           </View>
-                          <Pressable style={styles.historyBtn} onPress={() => onToggleMovimientos(r.id)}>
+                          <Pressable
+                            style={[styles.historyBtn, movLoadingById[r.id] && { opacity: 0.7 }]}
+                            onPress={() => onToggleMovimientos(r.id)}
+                            disabled={!!movLoadingById[r.id]}
+                          >
                             <Text style={styles.historyBtnText}>
-                              {movOpenById[r.id] ? "Ocultar movimientos" : "Ver movimientos"}
+                              {movLoadingById[r.id]
+                                ? "Cargando..."
+                                : movOpenById[r.id]
+                                  ? compactUi ? "Ocultar" : "Ocultar movimientos"
+                                  : compactUi ? "Movimientos" : "Ver movimientos"}
                             </Text>
                           </Pressable>
                         </View>
@@ -963,9 +993,9 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
 
                         <Text style={styles.sectionTitle}>Detalles</Text>
                         <View style={styles.detailHeaderRow}>
-                          <Text style={[styles.detailHeader, styles.colCategoria]}>Categoria</Text>
-                          <Text style={[styles.detailHeader, styles.colAsignado]}>Asignado</Text>
-                          <Text style={[styles.detailHeader, styles.colRendido]}>Rendido</Text>
+                          <Text style={[styles.detailHeader, styles.colCategoria]}>{compactUi ? "Cat." : "Categoria"}</Text>
+                          <Text style={[styles.detailHeader, styles.colAsignado]}>{compactUi ? "Asig." : "Asignado"}</Text>
+                          <Text style={[styles.detailHeader, styles.colRendido]}>{compactUi ? "Rend." : "Rendido"}</Text>
                           <Text style={[styles.detailHeader, styles.colAdjuntos]}>Adjuntos</Text>
                         </View>
                         {r.detalles?.map((d) => (
