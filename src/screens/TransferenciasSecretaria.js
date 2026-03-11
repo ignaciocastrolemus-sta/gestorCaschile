@@ -111,6 +111,29 @@ export default function TransferenciasSecretaria({ token }) {
     [periodos, selectedMonth, selectedYear]
   );
 
+  const activePeriodoOfMonth = useMemo(
+    () => periodosItemsByMonth.find((p) => p.activo) || null,
+    [periodosItemsByMonth]
+  );
+
+  const selectedPeriodoLabel = useMemo(() => {
+    if (!transferPeriodoId) return "Sin semana aplicada";
+    return (
+      periodosItemsByMonth.find((p) => String(p.value) === String(transferPeriodoId))?.label ||
+      periodos.find((p) => String(p.id ?? p.Id) === String(transferPeriodoId))?.nombre ||
+      periodos.find((p) => String(p.id ?? p.Id) === String(transferPeriodoId))?.Nombre ||
+      `Semana #${transferPeriodoId}`
+    );
+  }, [periodos, periodosItemsByMonth, transferPeriodoId]);
+
+  const selectedCapacitadorLabel = useMemo(() => {
+    if (!transferCapacitadorId) return "Todos";
+    return (
+      capacitadores.find((c) => String(c?.id ?? "") === String(transferCapacitadorId))?.nombre ||
+      transferCapacitadorId
+    );
+  }, [capacitadores, transferCapacitadorId]);
+
   const kpis = useMemo(() => {
     const totalAsignado = filteredTransferItems.reduce((acc, it) => acc + Number(it.totalAsignado || 0), 0);
     const totalRendido = filteredTransferItems.reduce((acc, it) => acc + Number(it.totalRendido || 0), 0);
@@ -317,6 +340,12 @@ export default function TransferenciasSecretaria({ token }) {
     }
   }, [draftPeriodoId, periodosItemsByMonth]);
 
+  useEffect(() => {
+    if (draftPeriodoId) return;
+    if (!activePeriodoOfMonth) return;
+    setDraftPeriodoId(String(activePeriodoOfMonth.value));
+  }, [activePeriodoOfMonth, draftPeriodoId]);
+
   const onGenerateWithConfirm = () => {
     const msg = "Se generaran las transferencias para el filtro actual. ¿Deseas continuar?";
     const proceed =
@@ -365,6 +394,14 @@ export default function TransferenciasSecretaria({ token }) {
       <View style={styles.transferCard}>
         <Text style={styles.transferTitle}>Filtros rapidos</Text>
         <Text style={styles.transferSub}>Define estado, año, mes, semana y capacitador.</Text>
+        <View style={styles.filterSummaryRow}>
+          <View style={styles.filterSummaryPill}>
+            <Text style={styles.filterSummaryLabel}>Semana activa sugerida</Text>
+            <Text style={styles.filterSummaryValue}>
+              {activePeriodoOfMonth?.label || "No hay semana activa en este mes"}
+            </Text>
+          </View>
+        </View>
         <View style={styles.filterRow}>
           <View style={styles.filterCol}>
             <Text style={styles.transferFilterLabel}>Estado</Text>
@@ -461,9 +498,25 @@ export default function TransferenciasSecretaria({ token }) {
       <View style={styles.transferCard}>
         <Text style={styles.transferTitle}>Transferencias (vista previa)</Text>
         <Text style={styles.transferSub}>Resultado del filtro aplicado.</Text>
+        <View style={styles.filterSummaryRow}>
+          <View style={styles.filterSummaryPill}>
+            <Text style={styles.filterSummaryLabel}>Estado aplicado</Text>
+            <Text style={styles.filterSummaryValue}>{transferEstado || "-"}</Text>
+          </View>
+          <View style={styles.filterSummaryPill}>
+            <Text style={styles.filterSummaryLabel}>Semana aplicada</Text>
+            <Text style={styles.filterSummaryValue}>{selectedPeriodoLabel}</Text>
+          </View>
+          <View style={styles.filterSummaryPill}>
+            <Text style={styles.filterSummaryLabel}>Capacitador</Text>
+            <Text style={styles.filterSummaryValue}>{selectedCapacitadorLabel}</Text>
+          </View>
+        </View>
 
         {filteredTransferItems.length === 0 ? (
-          <Text style={styles.emptyText}>No hay rendiciones para transferir.</Text>
+          <Text style={styles.emptyText}>
+            No hay rendiciones para ese filtro. Revisa la semana seleccionada, el estado exacto y si ya generaste las solicitudes para ese periodo.
+          </Text>
         ) : (
           <View style={styles.transferTable}>
             <View style={styles.transferHeaderRow}>
@@ -527,6 +580,19 @@ const styles = StyleSheet.create({
   },
   transferPicker: { height: 40, color: COLORS.text },
   transferHint: { marginTop: 6, color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  filterSummaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  filterSummaryPill: {
+    minWidth: 220,
+    flexGrow: 1,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#F8FAFF",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  filterSummaryLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 11 },
+  filterSummaryValue: { color: COLORS.text, fontWeight: "900", marginTop: 3, fontSize: 12 },
   transferTable: { marginTop: 10 },
   transferHeaderRow: {
     flexDirection: "row",

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView } from "react-native";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, Modal, ScrollView, Image } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -13,8 +13,6 @@ import {
   getVisibleNotifications,
   hideNotifications,
 } from "../utils/notificationUtils";
-
-// Vista Capacitador: rendición y carpeta de viajes
 
 export default function CapacitadorHome({ onLogout, token, embedded = false }) {
   const [activeMenu, setActiveMenu] = useState("rendicion");
@@ -69,11 +67,7 @@ export default function CapacitadorHome({ onLogout, token, embedded = false }) {
         ) : activeMenu === "saldos" ? (
           <CapacitadorSaldos token={token} />
         ) : (
-          <CapacitadorRendicion
-            token={token}
-            selectedViajeId={selectedViajeId}
-            selectedContext={rendicionContext}
-          />
+          <CapacitadorRendicion token={token} selectedViajeId={selectedViajeId} selectedContext={rendicionContext} />
         )}
       </View>
     );
@@ -82,7 +76,9 @@ export default function CapacitadorHome({ onLogout, token, embedded = false }) {
   return (
     <View style={dash.root}>
       <View style={dash.topbar}>
-        <Text style={dash.brand}>CAS-Chile</Text>
+        <View style={dash.brandWrap}>
+          <Text style={dash.brand}>RindeCas</Text>
+        </View>
         <View style={dash.topActions}>
           <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
             <Text style={dash.topBtnText}>{badgeCount > 0 ? `Notificaciones (${badgeCount})` : "Notificaciones"}</Text>
@@ -102,27 +98,22 @@ export default function CapacitadorHome({ onLogout, token, embedded = false }) {
       <View style={dash.body}>
         <View style={dash.sidebar}>
           <View style={dash.profileBox}>
-            <View style={dash.avatar} />
+            <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
             <View>
               <Text style={dash.profileName}>Capacitador</Text>
-              <Text style={dash.profileRole}>Usuario</Text>
+              <Text style={dash.profileRole}>Terreno</Text>
             </View>
           </View>
 
-          <Text style={dash.menuTitle}>OPCIONES</Text>
+          <View style={dash.menuTitleWrap}>
+            <Text style={dash.menuTitle}>OPCIONES</Text>
+          </View>
 
-          <MenuItem
-            label="Mis rendiciones"
-            active={activeMenu === "rendicion"}
-            onPress={() => setActiveMenu("rendicion")}
-          />
-          <MenuItem
-            label="Carpeta de viajes"
-            active={activeMenu === "carpeta"}
-            onPress={() => setActiveMenu("carpeta")}
-          />
+          <MenuItem label="Mis rendiciones" icon="🧾" active={activeMenu === "rendicion"} onPress={() => setActiveMenu("rendicion")} highlight />
+          <MenuItem label="Carpeta de viajes" icon="🗂️" active={activeMenu === "carpeta"} onPress={() => setActiveMenu("carpeta")} />
           <MenuItem
             label={badgeCount > 0 ? `Mis saldos (${badgeCount})` : "Mis saldos"}
+            icon="💰"
             active={activeMenu === "saldos"}
             onPress={() => setActiveMenu("saldos")}
           />
@@ -134,11 +125,7 @@ export default function CapacitadorHome({ onLogout, token, embedded = false }) {
           ) : activeMenu === "saldos" ? (
             <CapacitadorSaldos token={token} />
           ) : (
-            <CapacitadorRendicion
-              token={token}
-              selectedViajeId={selectedViajeId}
-              selectedContext={rendicionContext}
-            />
+            <CapacitadorRendicion token={token} selectedViajeId={selectedViajeId} selectedContext={rendicionContext} />
           )}
         </View>
       </View>

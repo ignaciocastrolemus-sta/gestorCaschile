@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView } from "react-native";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, Modal, ScrollView, Image } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -72,7 +72,9 @@ export default function SecretariaLayout({
   return (
     <View style={dash.root}>
       <View style={dash.topbar}>
-        <Text style={dash.brand}>Gestor CAS Chile</Text>
+        <View style={dash.brandWrap}>
+          <Text style={dash.brand}>RindeCas</Text>
+        </View>
 
         <View style={dash.topActions}>
           <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
@@ -95,45 +97,38 @@ export default function SecretariaLayout({
       <View style={dash.body}>
         <View style={dash.sidebar}>
           <View style={dash.profileBox}>
-            <View style={dash.avatar} />
+            <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
             <View>
-              <Text style={dash.profileName}>Administradora</Text>
-              <Text style={dash.profileRole}>Secretaria</Text>
+              <Text style={dash.profileName}>Secretaria</Text>
+              <Text style={dash.profileRole}>Operacional</Text>
             </View>
           </View>
 
-          <Text style={dash.menuTitle}>OPCIONES</Text>
+          <View style={dash.menuTitleWrap}>
+            <Text style={dash.menuTitle}>OPCIONES</Text>
+          </View>
 
-          <MenuItem
-            label="Ingresar gasto"
-            active={activeMenu === "gasto"}
-            onPress={() => setActiveMenu("gasto")}
-          />
+          <MenuItem label="Ingresar gasto" icon="🧾" active={activeMenu === "gasto"} onPress={() => setActiveMenu("gasto")} highlight />
           <MenuItem
             label={badgeCount > 0 ? `Carpeta de viajes (${badgeCount})` : "Carpeta de viajes"}
+            icon="🗂️"
             active={activeMenu === "carpeta"}
             onPress={() => setActiveMenu("carpeta")}
           />
-          <MenuItem
-            label="Saldos"
-            active={activeMenu === "saldos"}
-            onPress={() => setActiveMenu("saldos")}
-          />
+          <MenuItem label="Saldos" icon="💰" active={activeMenu === "saldos"} onPress={() => setActiveMenu("saldos")} />
           <MenuItem
             label="Asignaciones clientes"
+            icon="👥"
             active={activeMenu === "semanal"}
             onPress={() => setActiveMenu("semanal")}
           />
           <MenuItem
             label="Transferencias"
+            icon="⇄"
             active={activeMenu === "transfer"}
             onPress={() => setActiveMenu("transfer")}
           />
-          <MenuItem
-            label="Encuadre"
-            active={activeMenu === "encuadre"}
-            onPress={() => setActiveMenu("encuadre")}
-          />
+          <MenuItem label="Encuadre" icon="📋" active={activeMenu === "encuadre"} onPress={() => setActiveMenu("encuadre")} />
         </View>
 
         <View style={dash.content}>

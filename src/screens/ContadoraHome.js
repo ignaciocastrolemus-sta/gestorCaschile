@@ -1,6 +1,5 @@
-import React from "react";
-import { View, Text, Pressable, Modal, ScrollView } from "react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, Modal, ScrollView, Image } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -13,7 +12,6 @@ import {
   hideNotifications,
 } from "../utils/notificationUtils";
 
-// Contadora: revisión de rendiciones
 export default function ContadoraHome({ onLogout, token, embedded = false }) {
   const [activeMenu, setActiveMenu] = useState("rendiciones");
   const [notificaciones, setNotificaciones] = useState([]);
@@ -63,7 +61,9 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
   return (
     <View style={dash.root}>
       <View style={dash.topbar}>
-        <Text style={dash.brand}>CAS-Chile</Text>
+        <View style={dash.brandWrap}>
+          <Text style={dash.brand}>RindeCas</Text>
+        </View>
         <View style={dash.topActions}>
           <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
             <Text style={dash.topBtnText}>{badgeCount > 0 ? `Notificaciones (${badgeCount})` : "Notificaciones"}</Text>
@@ -80,24 +80,24 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
       <View style={dash.body}>
         <View style={dash.sidebar}>
           <View style={dash.profileBox}>
-            <View style={dash.avatar} />
+            <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
             <View>
               <Text style={dash.profileName}>Contadora</Text>
-              <Text style={dash.profileRole}>Revision</Text>
+              <Text style={dash.profileRole}>Revision financiera</Text>
             </View>
           </View>
 
-          <Text style={dash.menuTitle}>OPCIONES</Text>
+          <View style={dash.menuTitleWrap}>
+            <Text style={dash.menuTitle}>OPCIONES</Text>
+          </View>
           <MenuItem
             label={badgeCount > 0 ? `Rendiciones (${badgeCount})` : "Rendiciones"}
+            icon="🧾"
             active={activeMenu === "rendiciones"}
             onPress={() => setActiveMenu("rendiciones")}
+            highlight
           />
-          <MenuItem
-            label="Saldos"
-            active={activeMenu === "saldos"}
-            onPress={() => setActiveMenu("saldos")}
-          />
+          <MenuItem label="Saldos" icon="💰" active={activeMenu === "saldos"} onPress={() => setActiveMenu("saldos")} />
         </View>
 
         <View style={dash.content}>

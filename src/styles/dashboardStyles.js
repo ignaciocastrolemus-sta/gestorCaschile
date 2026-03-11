@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+﻿import { StyleSheet } from "react-native";
 import { COLORS } from "../constants/colors";
 
 const dash = StyleSheet.create({
@@ -11,6 +11,17 @@ const dash = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  brandWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 0,
+  },
+  brandLogo: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#fff",
   },
   brand: { color: "#fff", fontSize: 18, fontWeight: "900" },
   topActions: { flexDirection: "row", gap: 10 },
@@ -25,11 +36,14 @@ const dash = StyleSheet.create({
   body: { flex: 1, flexDirection: "row" },
 
   sidebar: {
-    width: 300,
+    width: 270,
     backgroundColor: "#F7F8FC",
     borderRightWidth: 1,
     borderRightColor: COLORS.grayBorder,
     padding: 16,
+  },
+  sidebarMenu: {
+    flex: 1,
   },
   profileBox: {
     flexDirection: "row",
@@ -39,23 +53,80 @@ const dash = StyleSheet.create({
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
-    borderRadius: 14,
+    borderRadius: 16,
+    shadowColor: "#0A2E6D",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   avatar: { width: 46, height: 46, borderRadius: 999, backgroundColor: "#E6ECF7" },
-  profileName: { fontWeight: "900", color: COLORS.text },
-  profileRole: { marginTop: 2, fontWeight: "900", color: COLORS.blue2 },
+  avatarLogo: {
+    width: 104,
+    height: 58,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+  },
+  profileName: { fontWeight: "900", color: COLORS.blue2, fontSize: 16 },
+  profileRole: { marginTop: 4, fontWeight: "900", color: COLORS.text, fontSize: 15 },
 
-  menuTitle: { marginTop: 18, marginBottom: 10, color: COLORS.blue2, fontWeight: "900" },
+  menuTitleWrap: {
+    marginTop: 18,
+    marginBottom: 12,
+    marginHorizontal: -16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.blue2,
+  },
+  menuTitle: { color: "#fff", fontWeight: "900", fontSize: 15, letterSpacing: 0.4 },
 
   item: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 18,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "transparent",
+    borderColor: "#E7EDF8",
+    backgroundColor: "rgba(255,255,255,0.76)",
   },
-  itemText: { fontWeight: "900", color: COLORS.text },
+  itemActive: {
+    backgroundColor: "#F0F5FF",
+    borderColor: "#C8D8FF",
+  },
+  itemHighlightActive: {
+    backgroundColor: COLORS.blue2,
+    borderColor: "#0A2E6D",
+    shadowColor: "#0A2E6D",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  itemInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 52,
+    gap: 12,
+    paddingHorizontal: 8,
+  },
+  itemIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#EEF3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemIconWrapActive: { backgroundColor: "#DCE8FF" },
+  itemIconWrapHighlight: { backgroundColor: "rgba(255,255,255,0.18)" },
+  itemIcon: { fontSize: 18, color: COLORS.blue2 },
+  itemIconActive: { color: COLORS.blue2 },
+  itemIconHighlight: { color: "#fff" },
+  itemText: { flex: 1, fontWeight: "900", color: COLORS.text, fontSize: 14 },
+  itemTextHighlight: { color: "#fff" },
+  itemArrow: { fontSize: 26, color: "#9FB4DD", fontWeight: "900" },
+  itemArrowActive: { color: COLORS.blue2 },
+  itemArrowHighlight: { color: "#fff" },
 
   content: { flex: 1, backgroundColor: COLORS.grayBg },
 

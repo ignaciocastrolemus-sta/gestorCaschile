@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Image, ScrollView } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -10,8 +10,6 @@ import AdminCatalogos from "./AdminCatalogos";
 import AdminTarifas from "./AdminTarifas";
 import ListadoAsignacionesSemanales from "./ListadoAsignacionesSemanales";
 import EncuadreRendiciones from "./EncuadreRendiciones";
-
-// Vista Admin: acceso a roles/usuarios y vistas principales
 
 export default function AdminHome({ token, onLogout, email = "" }) {
   const [activeMenu, setActiveMenu] = useState("usuarios");
@@ -30,7 +28,9 @@ export default function AdminHome({ token, onLogout, email = "" }) {
   return (
     <View style={dash.root}>
       <View style={dash.topbar}>
-        <Text style={dash.brand}>Gestor CAS Chile</Text>
+        <View style={dash.brandWrap}>
+          <Text style={dash.brand}>RindeCas</Text>
+        </View>
         <View style={dash.topActions}>
           <Pressable style={dash.topBtn}>
             <Text style={dash.topBtnText}>Inicio</Text>
@@ -47,48 +47,27 @@ export default function AdminHome({ token, onLogout, email = "" }) {
       <View style={dash.body}>
         <View style={dash.sidebar}>
           <View style={dash.profileBox}>
-            <View style={dash.avatar} />
+            <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
             <View>
-              <Text style={dash.profileName}>{email || "Administrador"}</Text>
-              <Text style={dash.profileRole}>Administrador</Text>
+              <Text style={dash.profileName}>Administrador</Text>
             </View>
           </View>
 
-          <Text style={dash.menuTitle}>ADMIN</Text>
+          <View style={dash.menuTitleWrap}>
+            <Text style={dash.menuTitle}>ADMINISTRACION</Text>
+          </View>
 
-          <MenuItem
-            label="Usuarios"
-            active={activeMenu === "usuarios"}
-            onPress={() => setActiveMenu("usuarios")}
-          />
-          <Text style={styles.sectionTitle}>Gestión</Text>
-          <MenuItem
-            label="Catálogos"
-            active={activeMenu === "catalogos"}
-            onPress={() => setActiveMenu("catalogos")}
-          />
-          <MenuItem
-            label="Tarifas"
-            active={activeMenu === "tarifas"}
-            onPress={() => setActiveMenu("tarifas")}
-          />
-          <MenuItem
-            label="Periodos"
-            active={activeMenu === "periodos"}
-            onPress={() => setActiveMenu("periodos")}
-          />
-          <MenuItem label="Roles" active={activeMenu === "roles"} onPress={() => setActiveMenu("roles")} />
-          <Text style={styles.sectionTitle}>Reportes</Text>
-          <MenuItem
-            label="Listados"
-            active={activeMenu === "listados"}
-            onPress={() => setActiveMenu("listados")}
-          />
-          <MenuItem
-            label="Encuadre"
-            active={activeMenu === "encuadre"}
-            onPress={() => setActiveMenu("encuadre")}
-          />
+          <ScrollView style={dash.sidebarMenu} contentContainerStyle={styles.sidebarContent} showsVerticalScrollIndicator>
+            <MenuItem label="Usuarios" icon="👤" active={activeMenu === "usuarios"} onPress={() => setActiveMenu("usuarios")} highlight />
+            <Text style={styles.sectionTitle}>Gestion</Text>
+            <MenuItem label="Catalogos" icon="🗃️" active={activeMenu === "catalogos"} onPress={() => setActiveMenu("catalogos")} />
+            <MenuItem label="Tarifas" icon="💳" active={activeMenu === "tarifas"} onPress={() => setActiveMenu("tarifas")} />
+            <MenuItem label="Periodos" icon="🗓️" active={activeMenu === "periodos"} onPress={() => setActiveMenu("periodos")} />
+            <MenuItem label="Roles" icon="🛡️" active={activeMenu === "roles"} onPress={() => setActiveMenu("roles")} />
+            <Text style={styles.sectionTitle}>Reportes</Text>
+            <MenuItem label="Listados" icon="📑" active={activeMenu === "listados"} onPress={() => setActiveMenu("listados")} />
+            <MenuItem label="Encuadre" icon="📊" active={activeMenu === "encuadre"} onPress={() => setActiveMenu("encuadre")} />
+          </ScrollView>
         </View>
 
         <View style={dash.content}>
@@ -116,6 +95,9 @@ export default function AdminHome({ token, onLogout, email = "" }) {
 }
 
 const styles = StyleSheet.create({
+  sidebarContent: {
+    paddingBottom: 24,
+  },
   sectionTitle: {
     marginTop: 10,
     marginBottom: 4,

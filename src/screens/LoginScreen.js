@@ -46,7 +46,7 @@ export default function LoginScreen({
       <View style={styles.bottomWave3} />
 
       <View style={styles.card}>
-        <Image style={styles.logo} source={require("../../assets/Logo CAS-CHILE2 2.png")} />
+        <Image style={styles.logo} source={require("../../assets/RindeCas.jpg")} />
 
         <Text style={styles.title}>Bienvenido</Text>
         <Text style={styles.subtitle}>Inicia sesion para continuar</Text>
@@ -162,7 +162,7 @@ export default function LoginScreen({
           </View>
         )}
 
-        <Text style={styles.footer}>CAS - Sistema de Gastos</Text>
+        <Text style={styles.footer}>RindeCas</Text>
       </View>
     </View>
   );

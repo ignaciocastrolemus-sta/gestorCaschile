@@ -9,6 +9,7 @@ import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 import StatusMessage from "../components/StatusMessage";
 import { exportReportPdf } from "../utils/reportExport";
+import { obtenerSaldoMovimientos } from "../api/rendiciones";
 
 const API_URL = `${API_BASE}/Rendiciones/encuadre`;
 const STORAGE_KEY = "encuadre_rendiciones_filters_v1";
@@ -56,28 +57,42 @@ const getPeriodoLabel = (value) => {
   });
 };
 
-const getSaldoActualSigned = (item) => {
+const getSaldoPendienteAbierto = (item) => {
   if (!item || typeof item !== "object") return 0;
   const pendiente = Number(item.saldoPendiente || 0);
   const saldoEstado = normalize(item.saldoEstado);
-  const tipoResultado = normalize(item.tipoResultado);
   const isCerrado =
     pendiente <= 0 ||
     saldoEstado.includes("cerrado") ||
     saldoEstado.includes("pagado") ||
     saldoEstado.includes("completada") ||
     saldoEstado.includes("sinsaldo");
-  if (isCerrado) return 0;
+  return isCerrado ? 0 : Math.abs(pendiente);
+};
+
+const getSaldoActualSigned = (item) => {
+  if (!item || typeof item !== "object") return 0;
+  const pendiente = getSaldoPendienteAbierto(item);
+  const tipoResultado = normalize(item.tipoResultado);
+  if (pendiente <= 0) return 0;
   if (tipoResultado === "reembolso") return Math.abs(pendiente);
   if (tipoResultado === "devolucion") return -Math.abs(pendiente);
   return 0;
 };
 
-const getEstadoVisual = (item) => {
+const getResultadoVisual = (item) => {
   const saldo = getSaldoActualSigned(item);
   if (saldo === 0) return { key: "cuadra", label: "Cerrada", color: "#146C43", bg: "#EAF8EF" };
   if (saldo > 0) return { key: "faltante", label: "Empresa debe", color: "#B54708", bg: "#FFF3E8" };
   return { key: "exceso", label: "Capacitador debe", color: "#B42318", bg: "#FEECEC" };
+};
+
+const getEstadoSaldoVisual = (item) => {
+  const pendiente = getSaldoPendienteAbierto(item);
+  const saldoEstado = normalize(item?.saldoEstado);
+  if (pendiente <= 0) return { label: "Cerrado", color: "#146C43", bg: "#EAF8EF" };
+  if (saldoEstado.includes("parcial")) return { label: "Parcial", color: "#B54708", bg: "#FFF3E8" };
+  return { label: "Pendiente", color: "#B42318", bg: "#FEECEC" };
 };
 
 const getReembolsoPara = (item) => {
@@ -148,6 +163,8 @@ export default function EncuadreRendiciones({ token }) {
   const [search, setSearch] = useState(persisted?.search || "");
   const [selectedItem, setSelectedItem] = useState(null);
   const [modalMode, setModalMode] = useState("detalle");
+  const [saldoMovimientos, setSaldoMovimientos] = useState([]);
+  const [saldoLoading, setSaldoLoading] = useState(false);
 
   // Mantiene la consulta base al backend y deja los filtros rapidos  en frontend.
   const load = useCallback(async () => {
@@ -254,16 +271,16 @@ export default function EncuadreRendiciones({ token }) {
   // Filtrado final aplicando vista de saldo.
   const itemsFiltrados = useMemo(() => {
     return itemsBaseFiltrados.filter((it) => {
-      const saldoActual = getSaldoActualSigned(it);
-      if (filtro.saldoVista === "pendientes") return saldoActual !== 0;
-      if (filtro.saldoVista === "cerradas") return saldoActual === 0;
+      const saldoPendiente = getSaldoPendienteAbierto(it);
+      if (filtro.saldoVista === "pendientes") return saldoPendiente !== 0;
+      if (filtro.saldoVista === "cerradas") return saldoPendiente === 0;
       return true;
     });
   }, [itemsBaseFiltrados, filtro.saldoVista]);
 
   const saldoVistaStats = useMemo(() => {
     const total = itemsBaseFiltrados.length;
-    const pendientes = itemsBaseFiltrados.filter((it) => getSaldoActualSigned(it) !== 0).length;
+    const pendientes = itemsBaseFiltrados.filter((it) => getSaldoPendienteAbierto(it) !== 0).length;
     const cerradas = total - pendientes;
     return { total, pendientes, cerradas };
   }, [itemsBaseFiltrados]);
@@ -297,9 +314,9 @@ export default function EncuadreRendiciones({ token }) {
       (acc, it) => {
         acc.asignado += Number(it.totalAsignado || 0);
         acc.rendido += Number(it.totalRendido || 0);
-        const saldo = getSaldoActualSigned(it);
-        acc.diff += saldo;
-        if (saldo === 0) acc.cuadradas += 1;
+        const saldoPendiente = getSaldoPendienteAbierto(it);
+        acc.diff += saldoPendiente;
+        if (saldoPendiente === 0) acc.cuadradas += 1;
         return acc;
       },
       { asignado: 0, rendido: 0, diff: 0, cuadradas: 0 }
@@ -332,8 +349,9 @@ export default function EncuadreRendiciones({ token }) {
   const descargarCsv = (soloItem) => {
     const sep = ";";
     const rows = (soloItem ? [soloItem] : itemsFiltrados).map((it) => {
-      const estadoVisual = getEstadoVisual(it);
-      const saldoActual = getSaldoActualSigned(it);
+      const estadoVisual = getResultadoVisual(it);
+      const saldoActual = getSaldoPendienteAbierto(it);
+      const estadoSaldo = getEstadoSaldoVisual(it);
       const reembolsoPara = getReembolsoPara(it);
       const combustible = getCombustible(it);
       return [
@@ -344,6 +362,7 @@ export default function EncuadreRendiciones({ token }) {
         getPeriodoLabel(it?.viaje?.fechaInicio),
         it?.estado || "",
         estadoVisual.label,
+        estadoSaldo.label,
         reembolsoPara,
         combustible,
         Number(it?.totalAsignado || 0),
@@ -370,11 +389,12 @@ export default function EncuadreRendiciones({ token }) {
         "Periodo",
         "Estado",
         "Resultado",
+        "Estado saldo",
         "Reembolso para",
         "Combustible",
         "Total Asignado",
         "Total Rendido",
-        "Saldo actual",
+        "Saldo pendiente",
       ]
         .map(csvCell)
         .join(sep),
@@ -416,8 +436,9 @@ export default function EncuadreRendiciones({ token }) {
 
     const rowsHtml = data
       .map((it) => {
-        const estadoVisual = getEstadoVisual(it);
-        const saldoActual = getSaldoActualSigned(it);
+        const estadoVisual = getResultadoVisual(it);
+        const saldoActual = getSaldoPendienteAbierto(it);
+        const estadoSaldo = getEstadoSaldoVisual(it);
         const reembolsoPara = getReembolsoPara(it);
         const combustible = getCombustible(it);
         return `
@@ -429,6 +450,7 @@ export default function EncuadreRendiciones({ token }) {
             <td>${esc(getPeriodoLabel(it?.viaje?.fechaInicio))}</td>
             <td>${esc(it?.estado || "-")}</td>
             <td>${esc(estadoVisual.label)}</td>
+            <td>${esc(estadoSaldo.label)}</td>
             <td>${esc(reembolsoPara)}</td>
             <td style="text-align:right">${Number(combustible || 0).toLocaleString("es-CL")}</td>
             <td style="text-align:right">${Number(it?.totalAsignado || 0).toLocaleString("es-CL")}</td>
@@ -470,15 +492,16 @@ export default function EncuadreRendiciones({ token }) {
                 <th>Periodo</th>
                 <th>Estado</th>
                 <th>Resultado</th>
+                <th>Estado saldo</th>
                 <th>Reembolso para</th>
                 <th>Combustible</th>
                 <th>Total Asignado</th>
                 <th>Total Rendido</th>
-                <th>Saldo actual</th>
+                <th>Saldo pendiente</th>
               </tr>
             </thead>
             <tbody>
-              ${rowsHtml || '<tr><td colspan="12">Sin datos para exportar</td></tr>'}
+              ${rowsHtml || '<tr><td colspan="13">Sin datos para exportar</td></tr>'}
             </tbody>
           </table>
         </body>
@@ -518,11 +541,12 @@ export default function EncuadreRendiciones({ token }) {
         "Periodo",
         "Estado",
         "Resultado",
+        "Estado saldo",
         "Reembolso para",
         "Combustible",
         "Total Asignado",
         "Total Rendido",
-        "Saldo actual",
+        "Saldo pendiente",
       ],
       rows: data.map((it) => [
         { value: it.id },
@@ -531,26 +555,44 @@ export default function EncuadreRendiciones({ token }) {
         { value: it?.viaje?.regionNombre || "-" },
         { value: getPeriodoLabel(it?.viaje?.fechaInicio) },
         { value: it?.estado || "-" },
-        { value: getEstadoVisual(it).label },
+        { value: getResultadoVisual(it).label },
+        { value: getEstadoSaldoVisual(it).label },
         { value: getReembolsoPara(it) },
         { value: `$ ${fmtMoney(getCombustible(it))}`, align: "right" },
         { value: `$ ${fmtMoney(it?.totalAsignado || 0)}`, align: "right" },
         { value: `$ ${fmtMoney(it?.totalRendido || 0)}`, align: "right" },
-        { value: `$ ${fmtMoney(getSaldoActualSigned(it) || 0)}`, align: "right" },
+        { value: `$ ${fmtMoney(getSaldoPendienteAbierto(it) || 0)}`, align: "right" },
       ]),
     });
     if (!ok) Alert.alert("Exportar", "La exportacion PDF solo esta habilitada en web.");
   };
 
   // Abre modal de detalle/rendicion para el registro seleccionado.
-  const openItemModal = (item, mode) => {
+  const openItemModal = async (item, mode) => {
     setSelectedItem(item);
     setModalMode(mode);
+    if (mode !== "saldo" || !item?.id || !token) {
+      setSaldoMovimientos([]);
+      setSaldoLoading(false);
+      return;
+    }
+
+    try {
+      setSaldoLoading(true);
+      const data = await obtenerSaldoMovimientos(token, item.id);
+      setSaldoMovimientos(Array.isArray(data) ? data : []);
+    } catch {
+      setSaldoMovimientos([]);
+    } finally {
+      setSaldoLoading(false);
+    }
   };
 
   const closeItemModal = () => {
     setSelectedItem(null);
     setModalMode("detalle");
+    setSaldoMovimientos([]);
+    setSaldoLoading(false);
   };
 
   return (
@@ -569,7 +611,7 @@ export default function EncuadreRendiciones({ token }) {
           { key: "rendido", label: "Total rendido", value: `$ ${fmtMoney(totales.rendido)}` },
           {
             key: "diferencia",
-            label: "Saldo actual",
+            label: "Saldo pendiente",
             value: `$ ${fmtMoney(totales.diff)}`,
             valueColor: Number(totales.diff) === 0 ? "#146C43" : "#B54708",
           },
@@ -703,14 +745,16 @@ export default function EncuadreRendiciones({ token }) {
                 <Text style={[styles.th, { flex: tableCols.combustible }]}>Combustible</Text>
                 <Text style={[styles.th, { flex: tableCols.asignado }]}>Asignado</Text>
                 <Text style={[styles.th, { flex: tableCols.rendido }]}>Rendido</Text>
-                <Text style={[styles.th, { flex: tableCols.saldo }]}>Saldo actual</Text>
-                <Text style={[styles.th, { flex: tableCols.estado }]}>Estado</Text>
+                <Text style={[styles.th, { flex: tableCols.saldo }]}>Saldo pendiente</Text>
+                <Text style={[styles.th, { flex: tableCols.estado }]}>Resultado</Text>
+                <Text style={[styles.th, { flex: tableCols.estado }]}>Estado saldo</Text>
                 <Text style={[styles.th, { flex: tableCols.acciones, textAlign: "left" }]}>Acciones</Text>
               </View>
 
               {itemsPaginadosConGrupo.map((it) => {
-                const estadoVisual = getEstadoVisual(it);
-                const saldoActual = getSaldoActualSigned(it);
+                const estadoVisual = getResultadoVisual(it);
+                const estadoSaldoVisual = getEstadoSaldoVisual(it);
+                const saldoPendiente = getSaldoPendienteAbierto(it);
                 return (
                   <React.Fragment key={it.id}>
                   {it._showMonth ? (
@@ -740,7 +784,7 @@ export default function EncuadreRendiciones({ token }) {
                     <Text style={[styles.td, { flex: tableCols.combustible }]}>$ {fmtMoney(getCombustible(it))}</Text>
                     <Text style={[styles.td, { flex: tableCols.asignado }]}>$ {fmtMoney(it.totalAsignado)}</Text>
                     <Text style={[styles.td, { flex: tableCols.rendido }]}>$ {fmtMoney(it.totalRendido)}</Text>
-                    <Text style={[styles.td, { flex: tableCols.saldo }]}>$ {fmtMoney(saldoActual)}</Text>
+                    <Text style={[styles.td, { flex: tableCols.saldo }]}>$ {fmtMoney(saldoPendiente)}</Text>
 
                     <View style={{ flex: tableCols.estado }}>
                       <View style={[styles.statusPill, { backgroundColor: estadoVisual.bg }]}>
@@ -749,10 +793,20 @@ export default function EncuadreRendiciones({ token }) {
                         </Text>
                       </View>
                     </View>
+                    <View style={{ flex: tableCols.estado }}>
+                      <View style={[styles.statusPill, { backgroundColor: estadoSaldoVisual.bg }]}>
+                        <Text style={[styles.statusText, { color: estadoSaldoVisual.color }]}>
+                          {estadoSaldoVisual.label}
+                        </Text>
+                      </View>
+                    </View>
 
                     <View style={[styles.rowActions, { flex: tableCols.acciones }]}>
                       <Pressable style={styles.actionBtn} onPress={() => openItemModal(it, "detalle")}>
                         <Text style={styles.actionText}>{compactTable ? "Detalle" : "Ver detalle"}</Text>
+                      </Pressable>
+                      <Pressable style={styles.actionBtn} onPress={() => openItemModal(it, "saldo")}>
+                        <Text style={styles.actionText}>{compactTable ? "Saldo" : "Ver historial saldo"}</Text>
                       </Pressable>
                       <Pressable style={styles.actionBtn} onPress={() => openItemModal(it, "rendicion")}>
                         <Text style={styles.actionText}>{compactTable ? "Rendicion" : "Ver rendicion"}</Text>
@@ -798,7 +852,11 @@ export default function EncuadreRendiciones({ token }) {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {modalMode === "detalle" ? "Detalle de encuadre" : "Rendicion del viaje"}
+                {modalMode === "detalle"
+                  ? "Detalle de encuadre"
+                  : modalMode === "saldo"
+                    ? "Historial de saldo"
+                    : "Rendicion del viaje"}
               </Text>
               <Pressable style={styles.modalCloseBtn} onPress={closeItemModal}>
                 <Text style={styles.modalCloseText}>Cerrar</Text>
@@ -830,7 +888,7 @@ export default function EncuadreRendiciones({ token }) {
                     Diferencia original: $ {fmtMoney(selectedItem?.diferencia || 0)}
                   </Text>
                   <Text style={styles.modalTotalText}>
-                    Saldo actual: $ {fmtMoney(getSaldoActualSigned(selectedItem) || 0)}
+                    Saldo pendiente: $ {fmtMoney(getSaldoPendienteAbierto(selectedItem) || 0)}
                   </Text>
                 </View>
 
@@ -853,6 +911,32 @@ export default function EncuadreRendiciones({ token }) {
                       ))
                     ) : (
                       <Text style={styles.modalHint}>No hay detalle de categorias en este registro.</Text>
+                    )}
+                  </>
+                ) : modalMode === "saldo" ? (
+                  <>
+                    <Text style={styles.modalBlockTitle}>Movimientos registrados</Text>
+                    {saldoLoading ? (
+                      <Text style={styles.modalHint}>Cargando historial...</Text>
+                    ) : saldoMovimientos.length > 0 ? (
+                      saldoMovimientos.map((mov) => (
+                        <View
+                          key={mov?.id ?? `${mov?.fechaRegistro}-${mov?.tipoOperacion}-${mov?.monto}`}
+                          style={styles.modalDetailRow}
+                        >
+                          <Text style={styles.modalDetailLabel}>
+                            {mov?.tipoOperacion || "Movimiento"} | {mov?.tipoResultado || "-"}
+                          </Text>
+                          <Text style={styles.modalDetailValue}>
+                            Monto: $ {fmtMoney(mov?.monto || 0)} | Antes: $ {fmtMoney(mov?.saldoAnterior || 0)} | Despues: $ {fmtMoney(mov?.saldoPosterior || 0)}
+                          </Text>
+                          <Text style={styles.modalDetailValue}>
+                            {fmtDate(mov?.fechaRegistro)} {mov?.observacion ? `| ${mov.observacion}` : ""}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.modalHint}>No hay movimientos registrados para esta rendicion.</Text>
                     )}
                   </>
                 ) : (
