@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 function useCatalogo({ token, path, incluirInactivos = false }) {
@@ -95,6 +95,8 @@ function useCatalogo({ token, path, incluirInactivos = false }) {
 }
 
 export default function AdminCatalogos({ token }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [activeTab, setActiveTab] = useState("clientes");
   const [editing, setEditing] = useState(null);
   const [nombre, setNombre] = useState("");
@@ -230,7 +232,7 @@ export default function AdminCatalogos({ token }) {
       <Text style={dash.h1}>Catalogos</Text>
       <Text style={dash.h2}>Clientes, comunas y regiones.</Text>
 
-      <View style={styles.tabs}>
+      <View style={[styles.tabs, isMobile && styles.tabsMobile]}>
         <Pressable
           style={[styles.tab, isClientes && styles.tabActive]}
           onPress={() => {
@@ -280,7 +282,7 @@ export default function AdminCatalogos({ token }) {
           style={dash.input}
         />
 
-        <View style={styles.btnRow}>
+        <View style={[styles.btnRow, isMobile && styles.btnRowMobile]}>
           <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>{loading ? "Guardando..." : "Guardar"}</Text>
           </Pressable>
@@ -299,7 +301,7 @@ export default function AdminCatalogos({ token }) {
       </View>
 
       <View style={dash.panel}>
-        <View style={styles.listHeaderRow}>
+        <View style={[styles.listHeaderRow, isMobile && styles.listHeaderRowMobile]}>
           <Text style={dash.panelTitle}>Listado</Text>
           <Pressable
             style={[styles.chipBtn, showInactivos && styles.chipBtnActive]}
@@ -316,7 +318,7 @@ export default function AdminCatalogos({ token }) {
           <Text style={styles.empty}>No hay registros.</Text>
         ) : (
           itemsVisibles.map((row) => (
-            <View key={row.id} style={styles.listRow}>
+            <View key={row.id} style={[styles.listRow, isMobile && styles.listRowMobile]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.listTitle}>{row.nombre || row.Nombre}</Text>
                 {/* Id visible para facilitar pruebas y relaciones (RegionId/ComunaId). */}
@@ -326,7 +328,7 @@ export default function AdminCatalogos({ token }) {
                 {isClientes && <Text style={styles.listSub}>ComunaId: {row.comunaId || row.ComunaId}</Text>}
                 <Text style={styles.listSub}>Activo: {isActivo(row) ? "Si" : "No"}</Text>
               </View>
-              <View style={styles.actions}>
+              <View style={[styles.actions, isMobile && styles.actionsMobile]}>
                 <Pressable style={styles.smallBtn} onPress={() => onEdit(row)} disabled={loading}>
                   <Text style={styles.smallBtnText}>Editar</Text>
                 </Pressable>
@@ -346,7 +348,8 @@ export default function AdminCatalogos({ token }) {
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  tabs: { flexDirection: "row", gap: 10, marginBottom: 12, flexWrap: "wrap" },
+  tabsMobile: { flexDirection: "column" },
   tab: {
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -358,7 +361,8 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: COLORS.blue2, borderColor: COLORS.blue2 },
   tabText: { fontWeight: "800", color: COLORS.blue2 },
   tabTextActive: { color: "#fff" },
-  btnRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
+  btnRowMobile: { flexDirection: "column", alignItems: "stretch" },
   primaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -386,7 +390,8 @@ const styles = StyleSheet.create({
   },
   error: { color: "#B42318", fontWeight: "800" },
   empty: { color: COLORS.muted, fontWeight: "800" },
-  listHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  listHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
+  listHeaderRowMobile: { flexDirection: "column", alignItems: "flex-start" },
   chipBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -406,9 +411,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
   },
+  listRowMobile: { flexDirection: "column", alignItems: "flex-start", gap: 10 },
   listTitle: { fontWeight: "800", color: COLORS.text },
   listSub: { marginTop: 2, color: COLORS.muted, fontWeight: "700" },
-  actions: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  actionsMobile: { width: "100%", flexDirection: "column", alignItems: "stretch" },
   smallBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -427,3 +434,4 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
+

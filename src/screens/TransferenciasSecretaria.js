@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
-import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { API_BASE } from "../config/api";
 import { COLORS } from "../constants/colors";
@@ -36,6 +36,8 @@ const formatPeriodoLabel = (p) => {
 
 // Secretaria: transferencias (resumen por capacitador)
 export default function TransferenciasSecretaria({ token }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
@@ -517,6 +519,28 @@ export default function TransferenciasSecretaria({ token }) {
           <Text style={styles.emptyText}>
             No hay rendiciones para ese filtro. Revisa la semana seleccionada, el estado exacto y si ya generaste las solicitudes para ese periodo.
           </Text>
+        ) : isMobile ? (
+          <View style={styles.transferMobileList}>
+            {filteredTransferItems.map((t, idx) => (
+              <View key={`${t.capacitador}-${idx}`} style={styles.transferMobileCard}>
+                <Text style={styles.transferMobileTitle}>{t.capacitador}</Text>
+                <View style={styles.transferMobileStats}>
+                  <View style={styles.transferMobileStat}>
+                    <Text style={styles.transferMobileLabel}>Asignado</Text>
+                    <Text style={styles.transferMobileValue}>$ {Number(t.totalAsignado).toLocaleString("es-CL")}</Text>
+                  </View>
+                  <View style={styles.transferMobileStat}>
+                    <Text style={styles.transferMobileLabel}>Rendido</Text>
+                    <Text style={styles.transferMobileValue}>$ {Number(t.totalRendido).toLocaleString("es-CL")}</Text>
+                  </View>
+                  <View style={styles.transferMobileStat}>
+                    <Text style={styles.transferMobileLabel}>Cantidad</Text>
+                    <Text style={styles.transferMobileValue}>{t.cantidad}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
         ) : (
           <View style={styles.transferTable}>
             <View style={styles.transferHeaderRow}>
@@ -566,7 +590,7 @@ const styles = StyleSheet.create({
   transferSub: { marginTop: 4, color: COLORS.muted, fontWeight: "700" },
   filterRow: { flexDirection: "row", gap: 10, marginTop: 10, flexWrap: "wrap" },
   filterCol: { minWidth: 220, flexGrow: 1 },
-  filterActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  filterActions: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
   transferFilterLabel: { fontWeight: "800", color: COLORS.text, marginBottom: 6 },
   transferSelectWrap: {
     height: 40,
@@ -594,6 +618,26 @@ const styles = StyleSheet.create({
   filterSummaryLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 11 },
   filterSummaryValue: { color: COLORS.text, fontWeight: "900", marginTop: 3, fontSize: 12 },
   transferTable: { marginTop: 10 },
+  transferMobileList: { marginTop: 10, gap: 10 },
+  transferMobileCard: {
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#fff",
+  },
+  transferMobileTitle: { fontWeight: "900", color: COLORS.text, fontSize: 15 },
+  transferMobileStats: { marginTop: 10, gap: 8 },
+  transferMobileStat: {
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#F8FAFF",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  transferMobileLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 11 },
+  transferMobileValue: { color: COLORS.text, fontWeight: "900", marginTop: 2, fontSize: 13 },
   transferHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -614,7 +658,7 @@ const styles = StyleSheet.create({
   colTransferAsig: { width: 140, textAlign: "right" },
   colTransferRend: { width: 140, textAlign: "right" },
   colTransferCant: { width: 80, textAlign: "center" },
-  transferActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  transferActions: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
   transferBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -641,3 +685,9 @@ const styles = StyleSheet.create({
   transferBtnTextSecondary: { color: COLORS.blue2, fontWeight: "900" },
   emptyText: { color: COLORS.muted, fontWeight: "700" },
 });
+
+
+
+
+
+

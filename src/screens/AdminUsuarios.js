@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { apiGet, apiPost, apiPut } from "../api/httpClient";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert, useWindowDimensions } from "react-native";
 import { bajaSeguraUsuario, buildAnonUserView } from "../api/usuarios";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
@@ -14,7 +14,7 @@ const BANCOS_CHILE = [
   "BancoEstado",
   "Banco Santander",
   "Banco BCI",
-  "Banco Itaú",
+  "Banco ItaÃº",
   "Banco Scotiabank",
   "Banco Falabella",
   "Banco Ripley",
@@ -45,6 +45,8 @@ const TIPOS_CUENTA = [
 // Admin Usuarios: crear/editar/desactivar usuarios y asignar rol
 
 export default function AdminUsuarios({ token, title }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const ROLE_UI = {
     Administrador: { hint: "Acceso total", color: "#1E5AC8" },
     Secretaria: { hint: "Gestiona asignaciones", color: "#E2871B" },
@@ -317,7 +319,7 @@ export default function AdminUsuarios({ token, title }) {
       }
     };
 
-    const msg = `¿Aplicar baja segura a ${u.email}?\\nDesactiva la cuenta y elimina datos personales.`;
+    const msg = `Â¿Aplicar baja segura a ${u.email}?\\nDesactiva la cuenta y elimina datos personales.`;
     const canUseWindowConfirm = typeof window !== "undefined" && typeof window.confirm === "function";
     if (canUseWindowConfirm) {
       const ok = window.confirm(msg);
@@ -355,10 +357,10 @@ export default function AdminUsuarios({ token, title }) {
         <Text style={dash.panelTitle}>{editing ? "Editar usuario" : "Nuevo usuario"}</Text>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Datos básicos</Text>
+          <Text style={styles.sectionTitle}>Datos bÃ¡sicos</Text>
           <View style={styles.sectionCard}>
-            <View style={styles.grid}>
-              <View style={styles.col}>
+            <View style={[styles.grid, isMobile && styles.gridMobile]}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Nombre</Text>
                 <TextInput
                   value={form.nombre}
@@ -368,7 +370,7 @@ export default function AdminUsuarios({ token, title }) {
                   style={dash.input}
                 />
               </View>
-              <View style={styles.col}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Email</Text>
                 <TextInput
                   value={form.email}
@@ -381,8 +383,8 @@ export default function AdminUsuarios({ token, title }) {
               </View>
             </View>
 
-            <View style={styles.grid}>
-              <View style={styles.col}>
+            <View style={[styles.grid, isMobile && styles.gridMobile]}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Password</Text>
                 <TextInput
                   value={form.password}
@@ -393,9 +395,9 @@ export default function AdminUsuarios({ token, title }) {
                   style={dash.input}
                 />
               </View>
-              <View style={styles.col}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Rol</Text>
-                <View style={styles.roleChipsWrap}>
+                <View style={[styles.roleChipsWrap, isMobile && styles.roleChipsWrapMobile]}>
                   {roleItems.map((it) => {
                     const active = Number(form.rolId || roleItems[0]?.value) === Number(it.value);
                     const displayRole = roleDisplayName(it.label);
@@ -425,8 +427,8 @@ export default function AdminUsuarios({ token, title }) {
               </View>
             </View>
 
-            <View style={styles.grid}>
-              <View style={styles.col}>
+            <View style={[styles.grid, isMobile && styles.gridMobile]}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Activo</Text>
                 <View style={styles.switchRow}>
                   <Pressable
@@ -447,8 +449,8 @@ export default function AdminUsuarios({ token, title }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Cuenta bancaria</Text>
           <View style={styles.sectionCard}>
-            <View style={styles.grid}>
-              <View style={styles.col}>
+            <View style={[styles.grid, isMobile && styles.gridMobile]}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Numero de cuenta</Text>
                 <TextInput
                   value={form.cuentaNumero}
@@ -458,7 +460,7 @@ export default function AdminUsuarios({ token, title }) {
                   style={dash.input}
                 />
               </View>
-              <View style={styles.col}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Banco</Text>
                 <View style={styles.bankCombobox}>
                   <TextInput
@@ -505,20 +507,20 @@ export default function AdminUsuarios({ token, title }) {
                     </View>
                   )}
                 </View>
-                <Text style={styles.bankSelected}>{form.banco ? `Seleccionado: ${form.banco}` : "Selecciona un banco"}</Text>
+                <Text style={[styles.bankSelected, isMobile && styles.bankSelectedMobile]}>{form.banco ? `Seleccionado: ${form.banco}` : "Selecciona un banco"}</Text>
               </View>
             </View>
 
-            <View style={styles.grid}>
-              <View style={styles.col}>
+            <View style={[styles.grid, isMobile && styles.gridMobile]}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Tipo de cuenta</Text>
-                <View style={styles.typeChips}>
+                <View style={[styles.typeChips, isMobile && styles.typeChipsMobile]}>
                   {TIPOS_CUENTA.map((tipo) => {
                     const active = form.cuentaTipo === tipo;
                     return (
                       <Pressable
                         key={tipo}
-                        style={[styles.typeChip, active && styles.typeChipActive]}
+                        style={[styles.typeChip, active && styles.typeChipActive, isMobile && styles.typeChipMobile]}
                         onPress={() => setField("cuentaTipo", tipo)}
                       >
                         <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{tipo}</Text>
@@ -527,7 +529,7 @@ export default function AdminUsuarios({ token, title }) {
                   })}
                 </View>
               </View>
-              <View style={styles.col}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Nombre titular</Text>
                 <TextInput
                   value={form.titularNombre}
@@ -539,8 +541,8 @@ export default function AdminUsuarios({ token, title }) {
               </View>
             </View>
 
-            <View style={styles.grid}>
-              <View style={styles.col}>
+            <View style={[styles.grid, isMobile && styles.gridMobile]}>
+              <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>RUT titular</Text>
                 <TextInput
                   value={form.titularRut}
@@ -554,7 +556,7 @@ export default function AdminUsuarios({ token, title }) {
           </View>
         </View>
 
-        <View style={styles.btnRow}>
+        <View style={[styles.btnRow, isMobile && styles.btnRowMobile]}>
           <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>
               {loading ? "Guardando..." : editing ? "Guardar cambios" : "Crear usuario"}
@@ -592,7 +594,7 @@ export default function AdminUsuarios({ token, title }) {
             style={dash.input}
           />
         </View>
-        <View style={styles.filterRow}>
+        <View style={[styles.filterRow, isMobile && styles.filterRowMobile]}>
           <Pressable
             style={[styles.filterChip, filtroListado === "activos" && styles.filterChipActive]}
             onPress={() => setFiltroListado("activos")}
@@ -625,7 +627,7 @@ export default function AdminUsuarios({ token, title }) {
         ) : (
           <View style={styles.gridList}>
             {pagedUsuarios.map((u) => (
-              <View key={u.id} style={styles.card}>
+              <View key={u.id} style={[styles.card, isMobile && styles.cardMobile]}>
                 <View style={styles.cardLeft}>
                   <View style={styles.nameRow}>
                     <View style={styles.avatarMini}>
@@ -654,7 +656,7 @@ export default function AdminUsuarios({ token, title }) {
                     </View>
                   </View>
                 </View>
-                <View style={styles.actions}>
+                <View style={[styles.actions, isMobile && styles.actionsMobile]}>
                   <Pressable style={styles.smallBtn} onPress={() => onEdit(u)} disabled={loading}>
                     <Text style={styles.smallBtnText}>Editar</Text>
                   </Pressable>
@@ -668,7 +670,7 @@ export default function AdminUsuarios({ token, title }) {
               <Text style={styles.paginationText}>
                 Mostrando {pagedUsuarios.length} de {usuariosFiltrados.length} usuarios
               </Text>
-              <View style={styles.paginationActions}>
+              <View style={[styles.paginationActions, isMobile && styles.paginationActionsMobile]}>
                 <Pressable
                   style={[styles.pageBtn, pageSafe <= 1 && styles.pageBtnDisabled]}
                   onPress={() => setPage((p) => Math.max(1, p - 1))}
@@ -697,7 +699,9 @@ export default function AdminUsuarios({ token, title }) {
 
 const styles = StyleSheet.create({
   grid: { flexDirection: "row", gap: 12, marginBottom: 12 },
+  gridMobile: { flexDirection: "column" },
   col: { flex: 1, minWidth: 220 },
+  colMobile: { minWidth: 0, width: "100%" },
   section: { marginBottom: 14 },
   sectionTitle: { fontWeight: "900", color: COLORS.text, marginBottom: 8, fontSize: 16 },
   sectionCard: {
@@ -708,6 +712,7 @@ const styles = StyleSheet.create({
     borderColor: "#DDE8FF",
   },
   roleChipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  roleChipsWrapMobile: { flexDirection: "column" },
   roleChip: {
     minWidth: 150,
     borderWidth: 1,
@@ -715,8 +720,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
+  roleChipMobile: { minWidth: 0, width: "100%", paddingVertical: 10 },
   roleChipTitle: { fontWeight: "900", fontSize: 13 },
-  roleChipHint: { marginTop: 3, color: COLORS.muted, fontWeight: "700", fontSize: 12 },
+  roleChipHint: { marginTop: 4, color: COLORS.muted, fontWeight: "700", fontSize: 11, lineHeight: 15 },
   roleHint: {
     marginTop: 8,
     borderWidth: 1,
@@ -745,7 +751,9 @@ const styles = StyleSheet.create({
   bankItemText: { color: COLORS.text, fontWeight: "700" },
   bankEmpty: { paddingVertical: 10, paddingHorizontal: 12, color: COLORS.muted, fontWeight: "700" },
   bankSelected: { marginTop: 6, color: COLORS.muted, fontWeight: "700", fontSize: 12 },
+  bankSelectedMobile: { lineHeight: 16 },
   typeChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  typeChipsMobile: { gap: 10 },
   typeChip: {
     borderWidth: 1,
     borderColor: "#D9E5FF",
@@ -754,6 +762,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
   },
+  typeChipMobile: { paddingVertical: 9, paddingHorizontal: 14 },
   typeChipActive: { borderColor: "#AFC8FF", backgroundColor: "#E8F0FF" },
   typeChipText: { color: COLORS.text, fontWeight: "800", fontSize: 12 },
   typeChipTextActive: { color: COLORS.blue2 },
@@ -780,7 +789,8 @@ const styles = StyleSheet.create({
   switchThumbActive: { transform: [{ translateX: 22 }], borderColor: "#8BC9AB" },
   switchText: { fontWeight: "800", color: COLORS.muted },
   switchTextActive: { color: "#0D8A42" },
-  btnRow: { flexDirection: "row", gap: 10, marginTop: 6 },
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 6, flexWrap: "wrap" },
+  btnRowMobile: { flexDirection: "column", alignItems: "stretch" },
   primaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -821,7 +831,8 @@ const styles = StyleSheet.create({
   listHeader: { marginBottom: 6 },
   listHint: { color: COLORS.muted, fontWeight: "700", marginTop: 4 },
   searchWrap: { marginBottom: 10 },
-  filterRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  filterRow: { flexDirection: "row", gap: 8, marginBottom: 10, flexWrap: "wrap" },
+  filterRowMobile: { flexDirection: "column" },
   filterChip: {
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -844,6 +855,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
   },
+  cardMobile: { flexDirection: "column", gap: 10 },
   cardLeft: { flex: 1, paddingRight: 10 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 },
   avatarMini: {
@@ -873,7 +885,8 @@ const styles = StyleSheet.create({
   badgeInactive: { backgroundColor: "#FFF2F2", borderColor: "#F3C3C3" },
   badgeText: { fontWeight: "800", color: COLORS.text, fontSize: 12 },
   cardDetail: { marginTop: 6, color: COLORS.muted, fontWeight: "700" },
-  actions: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  actionsMobile: { width: "100%" },
   smallBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -898,7 +911,8 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.grayBorder,
   },
   paginationText: { color: COLORS.muted, fontWeight: "700", marginBottom: 8 },
-  paginationActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  paginationActions: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  paginationActionsMobile: { flexDirection: "column", alignItems: "flex-start" },
   pageBtn: {
     paddingVertical: 7,
     paddingHorizontal: 10,

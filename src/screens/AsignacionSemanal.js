@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, Pressable, Alert, StyleSheet } from "react-native";
+import { ScrollView, View, Text, Pressable, Alert, StyleSheet, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Card, Col, Input, Row, SectionTitle, Select } from "../components/UI";
@@ -45,6 +45,8 @@ const estadoBadgeTextStyle = (estado) => {
 };
 
 export default function AsignacionSemanal({ token }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [items, setItems] = useState([]);
   const [periodos, setPeriodos] = useState([]);
   const [capacitadores, setCapacitadores] = useState([]);
@@ -347,7 +349,7 @@ export default function AsignacionSemanal({ token }) {
               <Text style={[styles.monthText, selectedMonth === idx && styles.monthTextActive]}>{m}</Text>
             </Pressable>
           ))}
-          <View style={styles.yearSelect}>
+          <View style={[styles.yearSelect, isMobile && styles.yearSelectMobile]}>
             <Select
               value={String(selectedYear)}
               onValueChange={(v) => setSelectedYear(Number(v))}
@@ -485,7 +487,7 @@ export default function AsignacionSemanal({ token }) {
       ) : (
         filteredItems.map((it) => (
           <View key={it.id} style={styles.listCard}>
-            <View style={styles.listCardHeader}>
+            <View style={[styles.listCardHeader, isMobile && styles.listCardHeaderMobile]}>
               <Text style={styles.listTitle}>Asignacion #{it.id}</Text>
               <View style={[styles.statusBadge, estadoBadgeStyle(it.estado ?? it.Estado)]}>
                 <Text style={[styles.statusBadgeText, estadoBadgeTextStyle(it.estado ?? it.Estado)]}>
@@ -494,7 +496,7 @@ export default function AsignacionSemanal({ token }) {
               </View>
             </View>
 
-            <View style={styles.listMetaGrid}>
+            <View style={[styles.listMetaGrid, isMobile && styles.listMetaGridMobile]}>
               <View style={styles.listMetaItem}>
                 <Text style={styles.listMetaLabel}>Semana</Text>
                 <Text style={styles.listMetaValue}>
@@ -520,7 +522,7 @@ export default function AsignacionSemanal({ token }) {
               </View>
             </View>
 
-            <View style={styles.actions}>
+            <View style={[styles.actions, isMobile && styles.actionsMobile]}>
               <Pressable style={[styles.smallBtn, styles.actionBtn]} onPress={() => onEdit(it)}>
                 <Text style={styles.smallBtnText}>Editar</Text>
               </Pressable>
@@ -595,6 +597,7 @@ const styles = StyleSheet.create({
   monthText: { fontWeight: "900", color: COLORS.text },
   monthTextActive: { color: "#fff" },
   yearSelect: { minWidth: 120 },
+  yearSelectMobile: { width: "100%", minWidth: 0 },
   listCard: {
     padding: 12,
     borderRadius: 12,
@@ -609,6 +612,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 10,
   },
+  listCardHeaderMobile: { flexDirection: "column", alignItems: "flex-start", gap: 8 },
   listTitle: { fontWeight: "900", color: COLORS.text },
   statusBadge: {
     borderWidth: 1,
@@ -618,6 +622,7 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: { fontWeight: "900", fontSize: 12 },
   listMetaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  listMetaGridMobile: { flexDirection: "column" },
   listMetaItem: {
     minWidth: 180,
     flex: 1,
@@ -631,7 +636,8 @@ const styles = StyleSheet.create({
   listMetaLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
   listMetaValue: { color: COLORS.text, fontWeight: "800", marginTop: 2, fontSize: 13 },
   listSub: { marginTop: 2, color: COLORS.muted, fontWeight: "700" },
-  actions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  actions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
+  actionsMobile: { flexDirection: "column", alignItems: "stretch" },
   actionBtn: { minWidth: 90, alignItems: "center" },
   smallBtn: {
     paddingVertical: 6,
@@ -651,3 +657,4 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
+

@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Picker } from "@react-native-picker/picker";
@@ -10,6 +10,8 @@ import PageHeader from "../components/PageHeader";
 import KpiRow from "../components/KpiRow";
 
 export default function AdminTarifas({ token }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [items, setItems] = useState([]);
   const [regiones, setRegiones] = useState([]);
   const [comunas, setComunas] = useState([]);
@@ -279,8 +281,8 @@ export default function AdminTarifas({ token }) {
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>{editing ? "Editar tarifa" : "Nueva tarifa"}</Text>
 
-        <View style={styles.grid}>
-          <View style={styles.col}>
+        <View style={[styles.grid, isMobile && styles.gridMobile]}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Region</Text>
             <View style={styles.selectWrap}>
               <Picker
@@ -298,7 +300,7 @@ export default function AdminTarifas({ token }) {
               </Picker>
             </View>
           </View>
-          <View style={styles.col}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Periodo</Text>
             <TextInput
               value={form.periodo}
@@ -324,8 +326,8 @@ export default function AdminTarifas({ token }) {
           </Picker>
         </View>
 
-        <View style={styles.grid}>
-          <View style={styles.col}>
+        <View style={[styles.grid, isMobile && styles.gridMobile]}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Desayuno</Text>
             <TextInput
               value={form.desayuno}
@@ -335,7 +337,7 @@ export default function AdminTarifas({ token }) {
               style={dash.input}
             />
           </View>
-          <View style={styles.col}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Almuerzo</Text>
             <TextInput
               value={form.almuerzo}
@@ -345,7 +347,7 @@ export default function AdminTarifas({ token }) {
               style={dash.input}
             />
           </View>
-          <View style={styles.col}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Once</Text>
             <TextInput
               value={form.once}
@@ -357,8 +359,8 @@ export default function AdminTarifas({ token }) {
           </View>
         </View>
 
-        <View style={styles.grid}>
-          <View style={styles.col}>
+        <View style={[styles.grid, isMobile && styles.gridMobile]}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Cena</Text>
             <TextInput
               value={form.cena}
@@ -368,7 +370,7 @@ export default function AdminTarifas({ token }) {
               style={dash.input}
             />
           </View>
-          <View style={styles.col}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Viatico</Text>
             <TextInput
               value={form.viatico}
@@ -378,7 +380,7 @@ export default function AdminTarifas({ token }) {
               style={dash.input}
             />
           </View>
-          <View style={styles.col}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Activo</Text>
             <View style={styles.toggleRow}>
               <Pressable
@@ -397,7 +399,7 @@ export default function AdminTarifas({ token }) {
           </View>
         </View>
 
-        <View style={styles.btnRow}>
+        <View style={[styles.btnRow, isMobile && styles.btnRowMobile]}>
           <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>{loading ? "Guardando..." : "Guardar"}</Text>
           </Pressable>
@@ -418,7 +420,7 @@ export default function AdminTarifas({ token }) {
         <Text style={dash.panelTitle}>Listado</Text>
         <View style={styles.filterCard}>
           <Text style={styles.filterTitle}>Filtros rapidos</Text>
-          <View style={styles.filterRow}>
+          <View style={[styles.filterRow, isMobile && styles.filterRowMobile]}>
             <View style={styles.filterCol}>
               <Text style={dash.label}>Region</Text>
               <View style={styles.selectWrap}>
@@ -460,7 +462,7 @@ export default function AdminTarifas({ token }) {
             </View>
           </View>
 
-          <View style={styles.searchRow}>
+          <View style={[styles.searchRow, isMobile && styles.searchRowMobile]}>
             <TextInput
               value={listQuery}
               onChangeText={setListQuery}
@@ -488,7 +490,7 @@ export default function AdminTarifas({ token }) {
           <Text style={styles.listCount}>
             Mostrando {pageStart}-{pageEnd} de {filteredItems.length}
           </Text>
-          <View style={styles.pageRow}>
+          <View style={[styles.pageRow, isMobile && styles.pageRowMobile]}>
             <Pressable
               style={[styles.pageBtn, safePage <= 1 && styles.pageBtnDisabled]}
               onPress={() => safePage > 1 && setListPage(safePage - 1)}
@@ -516,7 +518,7 @@ export default function AdminTarifas({ token }) {
             const activo = Boolean(t.activo ?? t.Activo);
             return (
               <View key={t.id} style={styles.listCard}>
-                <View style={styles.listHeader}>
+                <View style={[styles.listHeader, isMobile && styles.listHeaderMobile]}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.listTitle}>{t.municipio || t.Municipio}</Text>
                     <Text style={styles.listSub}>
@@ -534,7 +536,7 @@ export default function AdminTarifas({ token }) {
                   <Text style={styles.amountItem}>Cena: {t.cena ?? t.Cena}</Text>
                   <Text style={styles.amountItem}>Viatico: {t.viatico ?? t.Viatico}</Text>
                 </View>
-                <View style={styles.actions}>
+                <View style={[styles.actions, isMobile && styles.actionsMobile]}>
                   <Pressable style={styles.smallBtn} onPress={() => onEdit(t)} disabled={loading}>
                     <Text style={styles.smallBtnText}>Editar</Text>
                   </Pressable>
@@ -553,7 +555,9 @@ export default function AdminTarifas({ token }) {
 
 const styles = StyleSheet.create({
   grid: { flexDirection: "row", gap: 12, marginTop: 12 },
+  gridMobile: { flexDirection: "column" },
   col: { flex: 1, minWidth: 140 },
+  colMobile: { minWidth: 0, width: "100%" },
   selectWrap: {
     height: 44,
     borderWidth: 1,
@@ -578,7 +582,8 @@ const styles = StyleSheet.create({
   toggleBtnActive: { backgroundColor: "#E8F0FF", borderColor: "#BFD4FF" },
   toggleText: { fontWeight: "900", color: COLORS.text },
   toggleTextActive: { color: COLORS.blue2 },
-  btnRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
+  btnRowMobile: { flexDirection: "column", alignItems: "stretch" },
   primaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -615,9 +620,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   filterTitle: { fontWeight: "900", color: COLORS.text, marginBottom: 10 },
-  filterRow: { flexDirection: "row", gap: 12 },
+  filterRow: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
+  filterRowMobile: { flexDirection: "column" },
   filterCol: { flex: 1, minWidth: 160 },
-  searchRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  searchRow: { flexDirection: "row", gap: 10, marginTop: 10, flexWrap: "wrap" },
+  searchRowMobile: { flexDirection: "column" },
   searchInput: {
     flex: 1,
     height: 40,
@@ -659,6 +666,7 @@ const styles = StyleSheet.create({
   },
   listCount: { color: COLORS.muted, fontWeight: "800" },
   pageRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  pageRowMobile: { flexDirection: "column", alignItems: "flex-start" },
   pageBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -680,6 +688,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   listHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  listHeaderMobile: { flexDirection: "column", alignItems: "flex-start" },
   listTitle: { fontWeight: "800", color: COLORS.text },
   listSub: { marginTop: 2, color: COLORS.muted, fontWeight: "700" },
   badge: {
@@ -708,7 +717,8 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 12,
   },
-  actions: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 10 },
+  actionsMobile: { flexDirection: "column", alignItems: "stretch" },
   smallBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -727,4 +737,5 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
+
 

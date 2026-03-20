@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
@@ -21,6 +21,8 @@ const statusStyle = (estadoRaw) => {
 };
 
 export default function CapacitadorCarpeta({ token, onIrRendicion }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [viajes, setViajes] = useState([]);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("activas");
@@ -301,7 +303,7 @@ export default function CapacitadorCarpeta({ token, onIrRendicion }) {
                   <Text style={styles.pendingSaldoHint}>
                     Viaje #{viajeId || "-"} - {region} - {formatRango(fechaInicio, fechaTermino)}
                   </Text>
-                  <View style={styles.pendingActionRow}>
+                  <View style={[styles.pendingActionRow, isMobile && styles.pendingActionRowMobile]}>
                     <Text style={styles.pendingSaldoHint}>Ir a detalle del saldo</Text>
                     {esDevolucion && viajeId > 0 ? (
                       <Pressable
@@ -491,7 +493,7 @@ export default function CapacitadorCarpeta({ token, onIrRendicion }) {
         {!selected ? (
           <StatusMessage tone="info" text="No hay viajes para mostrar." style={styles.messageTight} />
         ) : (
-          <View style={styles.detailGrid}>
+          <View style={[styles.detailGrid, isMobile && styles.detailGridMobile]}>
             <View style={styles.detailCard}>
               <Text style={styles.detailTitle}>Asignaciones por dia</Text>
               {renderAsignacionRow("Desayuno", selected.desayuno)}
@@ -933,6 +935,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { color: COLORS.blue2, fontWeight: "900", fontSize: 12 },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
+  summaryRowMobile: { flexDirection: "column" },
   summaryCard: {
     minWidth: 160,
     flex: 1,
@@ -942,6 +945,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.grayBorder,
     backgroundColor: "#fff",
   },
+  summaryCardMobile: { minWidth: 0, width: "100%" },
   summaryLabel: { fontSize: 12, color: COLORS.muted, fontWeight: "800" },
   summaryValue: { marginTop: 4, fontWeight: "900", color: COLORS.text, fontSize: 16 },
   listHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -999,6 +1003,7 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: "900", color: COLORS.text },
   detailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
+  detailGridMobile: { flexDirection: "column" },
   nextActionBox: {
     marginTop: 10,
     marginBottom: 6,
@@ -1020,6 +1025,7 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#fff",
   },
+  detailCardMobile: { minWidth: 0, width: "100%" },
   detailTitle: { fontWeight: "900", color: COLORS.blue2, marginBottom: 8, fontSize: 16 },
   detailRow: {
     flexDirection: "row",
@@ -1029,6 +1035,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
   },
+  detailRowMobile: { flexDirection: "column", alignItems: "flex-start", gap: 4 },
   detailLabel: { fontWeight: "700", color: COLORS.text, flex: 1, fontSize: 15 },
   detailValue: { fontWeight: "900", color: COLORS.text, marginRight: 8, fontSize: 16 },
   detailTotal: {
@@ -1079,6 +1086,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
+  pendingActionRowMobile: { flexDirection: "column", alignItems: "stretch" },
   pendingActionBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -1093,4 +1101,5 @@ const styles = StyleSheet.create({
   saldoCerradoBox: { backgroundColor: "#E7F8ED", borderColor: "#BFE8CB" },
   messageTight: { marginBottom: 8 },
 });
+
 

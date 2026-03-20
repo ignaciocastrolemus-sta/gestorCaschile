@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, View, Text, Pressable, StyleSheet, TextInput } from "react-native";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollView, View, Text, Pressable, StyleSheet, TextInput, useWindowDimensions } from "react-native";
 import { COLORS } from "../constants/colors";
 import dash from "../styles/dashboardStyles";
 import PageHeader from "../components/PageHeader";
@@ -55,6 +55,8 @@ const pickComprobanteWeb = () =>
   });
 
 export default function CapacitadorSaldos({ token }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [items, setItems] = useState([]);
   const [notificaciones, setNotificaciones] = useState([]);
   const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("capacitador"));
@@ -341,7 +343,7 @@ export default function CapacitadorSaldos({ token }) {
                 </Pressable>
                 {mostrarAccion ? (
                   formById[r.id] ? (
-                    <View style={styles.formBox}>
+                    <View style={[styles.formBox, isMobile && styles.formBoxMobile]}>
                       <Text style={styles.formLabel}>Monto</Text>
                       <TextInput
                         value={String(formById[r.id]?.monto || "")}
@@ -439,6 +441,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  rowMobile: { flexDirection: "column" },
   title: { color: COLORS.text, fontWeight: "900" },
   sub: { marginTop: 3, color: COLORS.muted, fontWeight: "700", fontSize: 12 },
   btn: {
@@ -476,6 +479,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFF",
     gap: 6,
   },
+  formBoxMobile: { minWidth: 0, width: "100%" },
   formLabel: { color: COLORS.text, fontWeight: "800", fontSize: 12 },
   input: {
     borderWidth: 1,
@@ -488,6 +492,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 12,
   },
-  formActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 2 },
+  formActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 2, flexWrap: "wrap" },
   fileName: { color: COLORS.muted, fontWeight: "700", fontSize: 12 },
 });
+
+
+
+

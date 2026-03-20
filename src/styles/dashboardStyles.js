@@ -25,6 +25,7 @@ const dash = StyleSheet.create({
   },
   brand: { color: "#fff", fontSize: 18, fontWeight: "900" },
   topActions: { flexDirection: "row", gap: 10 },
+  topActionsMobile: { flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", rowGap: 8 },
   topBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -33,7 +34,8 @@ const dash = StyleSheet.create({
   },
   topBtnText: { color: "#fff", fontWeight: "900" },
 
-  body: { flex: 1, flexDirection: "row" },
+  body: { flex: 1, flexDirection: "row", minHeight: 0 },
+  bodyMobile: { flexDirection: "column" },
 
   sidebar: {
     width: 270,
@@ -128,7 +130,8 @@ const dash = StyleSheet.create({
   itemArrowActive: { color: COLORS.blue2 },
   itemArrowHighlight: { color: "#fff" },
 
-  content: { flex: 1, backgroundColor: COLORS.grayBg },
+  content: { flex: 1, backgroundColor: COLORS.grayBg, minWidth: 0 },
+  contentMobile: { width: "100%" },
 
   h1: { fontSize: 26, fontWeight: "900", color: COLORS.text },
   h2: { marginTop: 4, marginBottom: 14, color: COLORS.muted, fontWeight: "800" },
@@ -345,3 +348,54 @@ const dash = StyleSheet.create({
 });
 
 export default dash;
+
+Object.assign(dash, {
+  topbarMobile: {
+    height: "auto",
+    minHeight: 64,
+    paddingVertical: 12,
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  topbarRowMobile: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  drawerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.28)",
+    justifyContent: "flex-start",
+    alignItems: "flex-start",
+  },
+  drawerPanel: {
+    width: "84%",
+    maxWidth: 320,
+    height: "100%",
+    backgroundColor: "#F7F8FC",
+    borderRightWidth: 1,
+    borderRightColor: COLORS.grayBorder,
+    padding: 16,
+  },
+  drawerHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  drawerCloseBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "rgba(22,63,138,0.08)",
+  },
+  drawerCloseText: {
+    color: COLORS.blue2,
+    fontWeight: "900",
+  },
+});
+
+
+

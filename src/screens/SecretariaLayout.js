@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView, Image } from "react-native";
+import { View, Text, Pressable, Modal, ScrollView, Image, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -33,9 +33,12 @@ export default function SecretariaLayout({
   saveMsg,
   isSaving,
 }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 980;
   const [notificaciones, setNotificaciones] = useState([]);
   const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("secretaria"));
   const [showNotiModal, setShowNotiModal] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
 
   const loadNotificaciones = useCallback(async () => {
     try {
@@ -60,6 +63,10 @@ export default function SecretariaLayout({
     return () => clearInterval(timer);
   }, [authToken, loadNotificaciones]);
 
+  useEffect(() => {
+    if (!isMobile) setShowMenuModal(false);
+  }, [isMobile]);
+
   const visibleNotificaciones = useMemo(
     () => getVisibleNotifications(notificaciones, hiddenNotiIds),
     [notificaciones, hiddenNotiIds]
@@ -69,71 +76,131 @@ export default function SecretariaLayout({
     [notificaciones, hiddenNotiIds]
   );
 
-  return (
-    <View style={dash.root}>
-      <View style={dash.topbar}>
-        <View style={dash.brandWrap}>
-          <Text style={dash.brand}>RindeCas</Text>
-        </View>
-
-        <View style={dash.topActions}>
-          <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
-            <Text style={dash.topBtnText}>{badgeCount > 0 ? `Notificaciones (${badgeCount})` : "Notificaciones"}</Text>
-          </Pressable>
-          <Pressable style={dash.topBtn}>
-            <Text style={dash.topBtnText}>Inicio</Text>
-          </Pressable>
-
-          <Pressable style={dash.topBtn}>
-            <Text style={dash.topBtnText}>Administracion</Text>
-          </Pressable>
-
-          <Pressable style={[dash.topBtn, { backgroundColor: COLORS.orange }]} onPress={onLogout}>
-            <Text style={[dash.topBtnText, { color: "#fff" }]}>Salir</Text>
-          </Pressable>
+  const SidebarContent = () => (
+    <>
+      <View style={dash.profileBox}>
+        <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
+        <View>
+          <Text style={dash.profileName}>Secretaria</Text>
+          <Text style={dash.profileRole}>Operacional</Text>
         </View>
       </View>
 
-      <View style={dash.body}>
-        <View style={dash.sidebar}>
-          <View style={dash.profileBox}>
-            <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
-            <View>
-              <Text style={dash.profileName}>Secretaria</Text>
-              <Text style={dash.profileRole}>Operacional</Text>
+      <View style={dash.menuTitleWrap}>
+        <Text style={dash.menuTitle}>OPCIONES</Text>
+      </View>
+
+      <ScrollView style={dash.sidebarMenu} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator>
+        <MenuItem
+          label="Ingresar gasto"
+          icon="🧾"
+          active={activeMenu === "gasto"}
+          onPress={() => {
+            setActiveMenu("gasto");
+            setShowMenuModal(false);
+          }}
+          highlight
+        />
+        <MenuItem
+          label={badgeCount > 0 ? `Carpeta de viajes (${badgeCount})` : "Carpeta de viajes"}
+          icon="🗂️"
+          active={activeMenu === "carpeta"}
+          onPress={() => {
+            setActiveMenu("carpeta");
+            setShowMenuModal(false);
+          }}
+        />
+        <MenuItem
+          label="Saldos"
+          icon="💰"
+          active={activeMenu === "saldos"}
+          onPress={() => {
+            setActiveMenu("saldos");
+            setShowMenuModal(false);
+          }}
+        />
+        <MenuItem
+          label="Asignaciones clientes"
+          icon="👥"
+          active={activeMenu === "semanal"}
+          onPress={() => {
+            setActiveMenu("semanal");
+            setShowMenuModal(false);
+          }}
+        />
+        <MenuItem
+          label="Transferencias"
+          icon="⇄"
+          active={activeMenu === "transfer"}
+          onPress={() => {
+            setActiveMenu("transfer");
+            setShowMenuModal(false);
+          }}
+        />
+        <MenuItem
+          label="Encuadre"
+          icon="📋"
+          active={activeMenu === "encuadre"}
+          onPress={() => {
+            setActiveMenu("encuadre");
+            setShowMenuModal(false);
+          }}
+        />
+      </ScrollView>
+    </>
+  );
+
+  return (
+    <View style={dash.root}>
+      <View style={[dash.topbar, isMobile && dash.topbarMobile]}>
+        {isMobile ? (
+          <View style={dash.topbarRowMobile}>
+            <View style={dash.brandWrap}>
+              <Text style={dash.brand}>RindeCas</Text>
+            </View>
+            <View style={dash.topActionsMobile}>
+              <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
+                <Text style={dash.topBtnText}>{badgeCount > 0 ? `Noti (${badgeCount})` : "Noti"}</Text>
+              </Pressable>
+              <Pressable style={dash.topBtn} onPress={() => setShowMenuModal(true)}>
+                <Text style={dash.topBtnText}>Menu</Text>
+              </Pressable>
+              <Pressable style={[dash.topBtn, { backgroundColor: COLORS.orange }]} onPress={onLogout}>
+                <Text style={[dash.topBtnText, { color: "#fff" }]}>Salir</Text>
+              </Pressable>
             </View>
           </View>
+        ) : (
+          <>
+            <View style={dash.brandWrap}>
+              <Text style={dash.brand}>RindeCas</Text>
+            </View>
+            <View style={dash.topActions}>
+              <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
+                <Text style={dash.topBtnText}>{badgeCount > 0 ? `Notificaciones (${badgeCount})` : "Notificaciones"}</Text>
+              </Pressable>
+              <Pressable style={dash.topBtn}>
+                <Text style={dash.topBtnText}>Inicio</Text>
+              </Pressable>
+              <Pressable style={dash.topBtn}>
+                <Text style={dash.topBtnText}>Administracion</Text>
+              </Pressable>
+              <Pressable style={[dash.topBtn, { backgroundColor: COLORS.orange }]} onPress={onLogout}>
+                <Text style={[dash.topBtnText, { color: "#fff" }]}>Salir</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </View>
 
-          <View style={dash.menuTitleWrap}>
-            <Text style={dash.menuTitle}>OPCIONES</Text>
+      <View style={[dash.body, isMobile && dash.bodyMobile]}>
+        {!isMobile ? (
+          <View style={dash.sidebar}>
+            <SidebarContent />
           </View>
+        ) : null}
 
-          <ScrollView style={dash.sidebarMenu} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator>
-            <MenuItem label="Ingresar gasto" icon="🧾" active={activeMenu === "gasto"} onPress={() => setActiveMenu("gasto")} highlight />
-            <MenuItem
-              label={badgeCount > 0 ? `Carpeta de viajes (${badgeCount})` : "Carpeta de viajes"}
-              icon="🗂️"
-              active={activeMenu === "carpeta"}
-              onPress={() => setActiveMenu("carpeta")}
-            />
-            <MenuItem label="Saldos" icon="💰" active={activeMenu === "saldos"} onPress={() => setActiveMenu("saldos")} />
-            <MenuItem
-              label="Asignaciones clientes"
-              icon="👥"
-              active={activeMenu === "semanal"}
-              onPress={() => setActiveMenu("semanal")}
-            />
-            <MenuItem
-              label="Transferencias"
-              icon="⇄"
-              active={activeMenu === "transfer"}
-              onPress={() => setActiveMenu("transfer")}
-            />
-            <MenuItem label="Encuadre" icon="📋" active={activeMenu === "encuadre"} onPress={() => setActiveMenu("encuadre")} />
-          </ScrollView>
-        </View>
-
-        <View style={dash.content}>
+        <View style={[dash.content, isMobile && dash.contentMobile]}>
           {activeMenu === "carpeta" ? (
             <CarpetaViajes token={authToken} viewMode="rendiciones" />
           ) : activeMenu === "saldos" ? (
@@ -162,6 +229,20 @@ export default function SecretariaLayout({
           )}
         </View>
       </View>
+
+      <Modal transparent visible={showMenuModal} animationType="slide" onRequestClose={() => setShowMenuModal(false)}>
+        <Pressable style={dash.drawerOverlay} onPress={() => setShowMenuModal(false)}>
+          <Pressable style={dash.drawerPanel} onPress={() => null}>
+            <View style={dash.drawerHeaderRow}>
+              <Text style={{ color: COLORS.blue2, fontWeight: "900", fontSize: 16 }}>Menu</Text>
+              <Pressable style={dash.drawerCloseBtn} onPress={() => setShowMenuModal(false)}>
+                <Text style={dash.drawerCloseText}>Cerrar</Text>
+              </Pressable>
+            </View>
+            <SidebarContent />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal transparent visible={showNotiModal} animationType="fade" onRequestClose={() => setShowNotiModal(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.25)", justifyContent: "center", alignItems: "center", padding: 16 }}>
@@ -214,4 +295,3 @@ export default function SecretariaLayout({
     </View>
   );
 }
-

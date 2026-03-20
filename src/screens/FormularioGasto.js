@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-native";
+﻿import React from "react";
+import { View, Text, ScrollView, Pressable, Modal, StyleSheet, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import { Field, Small } from "../components/FormFields";
@@ -14,7 +14,7 @@ import {
   obtenerMunicipios,
 } from "../api/catalogos";
 
-// Secretaria: formulario principal de asignación de viajes
+// Secretaria: formulario principal de asignaciÃ³n de viajes
 export default function FormularioGasto({
   tipo,
   form,
@@ -29,6 +29,11 @@ export default function FormularioGasto({
   saveMsg,
   isSaving = false,
 }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
+  const panelGrid2 = isMobile ? styles.stack : dash.grid2;
+  const panelGrid3 = isMobile ? styles.stack : dash.grid3;
+  const panelGrid5 = isMobile ? styles.stack : dash.grid5;
   const [regiones, setRegiones] = React.useState([]);
   const [comunasPorRegion, setComunasPorRegion] = React.useState({});
   const [municipios, setMunicipios] = React.useState([]);
@@ -294,7 +299,7 @@ export default function FormularioGasto({
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Datos del viaje</Text>
 
-        <View style={dash.grid2}>
+        <View style={panelGrid2}>
           <View style={{ flex: 1 }}>
             <Text style={dash.label}>Tipo de viaje</Text>
             <View style={dash.toggleRow}>
@@ -312,10 +317,10 @@ export default function FormularioGasto({
               </Pressable>
             </View>
           </View>
-          <View />
+          {!isMobile ? <View /> : null}
         </View>
 
-        <View style={dash.grid2}>
+        <View style={panelGrid2}>
           <Field label="Fecha" placeholder="DD/MM/AAAA" value={form.fecha} disabled />
           <Field
             label="Capacitador"
@@ -347,7 +352,7 @@ export default function FormularioGasto({
           </View>
         )}
 
-        <View style={dash.grid2}>
+        <View style={panelGrid2}>
           <Field
             label="Jefe Proyecto / Capacitador"
             placeholder="Seleccionar..."
@@ -389,7 +394,7 @@ export default function FormularioGasto({
           </View>
         )}
 
-        <View style={dash.grid2}>
+        <View style={panelGrid2}>
           <View style={{ flex: 1 }}>
             <Text style={dash.label}>Modalidad</Text>
             <View style={dash.toggleRow}>
@@ -419,7 +424,7 @@ export default function FormularioGasto({
             keyboardType="numeric"
           />
         </View>
-        <View style={dash.grid2}>
+        <View style={panelGrid2}>
           <DateField
             label="Fecha inicio viaje"
             placeholder="DD/MM/AAAA"
@@ -428,14 +433,14 @@ export default function FormularioGasto({
           />
           <Field label="Fecha termino viaje" placeholder="DD/MM/AAAA" value={form.fechaTermino} disabled />
         </View>
-        <View style={dash.grid2}>
+        <View style={panelGrid2}>
           <Field
             label="Comuna / Municipalidad"
             placeholder="Escribir comuna"
             value={form.comuna}
             onChangeText={(value) => onTextChange("comuna", value)}
           />
-          <View />
+          {!isMobile ? <View /> : null}
         </View>
         {showComunas && (
           <View style={dash.suggestBox}>
@@ -450,20 +455,20 @@ export default function FormularioGasto({
 
       <View style={styles.summaryCard}>
         <Text style={styles.summaryTitle}>Resumen rapido del viaje</Text>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryPill}>
+        <View style={[styles.summaryRow, isMobile && styles.summaryRowMobile]}>
+          <View style={[styles.summaryPill, isMobile && styles.summaryPillMobile]}>
             <Text style={styles.summaryLabel}>Region</Text>
             <Text style={styles.summaryValue}>{form.region || "-"}</Text>
           </View>
-          <View style={styles.summaryPill}>
+          <View style={[styles.summaryPill, isMobile && styles.summaryPillMobile]}>
             <Text style={styles.summaryLabel}>Comuna</Text>
             <Text style={styles.summaryValue}>{form.comuna || "-"}</Text>
           </View>
-          <View style={styles.summaryPill}>
+          <View style={[styles.summaryPill, isMobile && styles.summaryPillMobile]}>
             <Text style={styles.summaryLabel}>Modalidad</Text>
             <Text style={styles.summaryValue}>{form.modalidad || "-"}</Text>
           </View>
-          <View style={styles.summaryPill}>
+          <View style={[styles.summaryPill, isMobile && styles.summaryPillMobile]}>
             <Text style={styles.summaryLabel}>Dias</Text>
             <Text style={styles.summaryValue}>{diasParaCalculo || 0}</Text>
           </View>
@@ -474,7 +479,7 @@ export default function FormularioGasto({
         <Text style={dash.panelTitle}>Asignaciones (por dia)</Text>
         <Text style={styles.panelHint}>Montos diarios definidos por tarifa y periodo activo.</Text>
 
-        <View style={dash.grid5}>
+        <View style={panelGrid5}>
           <Small
             label="Desayuno"
             value={form.desayuno}
@@ -524,7 +529,7 @@ export default function FormularioGasto({
         <Text style={dash.panelTitle}>Gastos ingresados manualmente</Text>
         <Text style={styles.panelHint}>Estos montos se suman como ajustes operativos del viaje.</Text>
 
-        <View style={dash.grid3}>
+        <View style={panelGrid3}>
           <Field
             label="Valor mov. asignado"
             placeholder="$"
@@ -548,7 +553,7 @@ export default function FormularioGasto({
           />
         </View>
 
-        <View style={dash.grid3}>
+        <View style={panelGrid3}>
           <Field
             label="Peajes"
             placeholder="$"
@@ -572,7 +577,7 @@ export default function FormularioGasto({
           />
         </View>
 
-        <View style={dash.grid3}>
+        <View style={panelGrid3}>
           <Field
             label="Total asig x Cliente"
             placeholder="$0"
@@ -675,6 +680,7 @@ const styles = StyleSheet.create({
   },
   summaryTitle: { color: COLORS.text, fontWeight: "900", marginBottom: 8, fontSize: 14 },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  summaryRowMobile: { flexDirection: "column" },
   summaryPill: {
     minWidth: 130,
     flex: 1,
@@ -685,7 +691,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
+  summaryPillMobile: { width: "100%" },
   summaryLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 11 },
   summaryValue: { color: COLORS.text, fontWeight: "800", marginTop: 3, fontSize: 13 },
   panelHint: { color: COLORS.muted, fontWeight: "700", marginBottom: 10, fontSize: 12, lineHeight: 17 },
+  stack: { flexDirection: "column", gap: 12 },
 });

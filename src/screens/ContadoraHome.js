@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView, Image } from "react-native";
+import { View, Text, Pressable, Modal, ScrollView, Image, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -13,10 +13,13 @@ import {
 } from "../utils/notificationUtils";
 
 export default function ContadoraHome({ onLogout, token, embedded = false }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 980;
   const [activeMenu, setActiveMenu] = useState("rendiciones");
   const [notificaciones, setNotificaciones] = useState([]);
   const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("contadora"));
   const [showNotiModal, setShowNotiModal] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
 
   const loadNotificaciones = useCallback(async () => {
     try {
@@ -41,6 +44,10 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
     return () => clearInterval(timer);
   }, [token, loadNotificaciones]);
 
+  useEffect(() => {
+    if (!isMobile) setShowMenuModal(false);
+  }, [isMobile]);
+
   const visibleNotificaciones = useMemo(
     () => getVisibleNotifications(notificaciones, hiddenNotiIds),
     [notificaciones, hiddenNotiIds]
@@ -58,52 +65,108 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
     );
   }
 
-  return (
-    <View style={dash.root}>
-      <View style={dash.topbar}>
-        <View style={dash.brandWrap}>
-          <Text style={dash.brand}>RindeCas</Text>
-        </View>
-        <View style={dash.topActions}>
-          <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
-            <Text style={dash.topBtnText}>{badgeCount > 0 ? `Notificaciones (${badgeCount})` : "Notificaciones"}</Text>
-          </Pressable>
-          <Pressable style={dash.topBtn}>
-            <Text style={dash.topBtnText}>Inicio</Text>
-          </Pressable>
-          <Pressable style={[dash.topBtn, { backgroundColor: COLORS.orange }]} onPress={onLogout}>
-            <Text style={[dash.topBtnText, { color: "#fff" }]}>Salir</Text>
-          </Pressable>
+  const SidebarContent = () => (
+    <>
+      <View style={dash.profileBox}>
+        <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
+        <View>
+          <Text style={dash.profileName}>Contadora</Text>
+          <Text style={dash.profileRole}>Revision financiera</Text>
         </View>
       </View>
 
-      <View style={dash.body}>
-        <View style={dash.sidebar}>
-          <View style={dash.profileBox}>
-            <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
-            <View>
-              <Text style={dash.profileName}>Contadora</Text>
-              <Text style={dash.profileRole}>Revision financiera</Text>
+      <View style={dash.menuTitleWrap}>
+        <Text style={dash.menuTitle}>OPCIONES</Text>
+      </View>
+      <ScrollView style={dash.sidebarMenu} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator>
+        <MenuItem
+          label={badgeCount > 0 ? `Rendiciones (${badgeCount})` : "Rendiciones"}
+          icon="🧾"
+          active={activeMenu === "rendiciones"}
+          onPress={() => {
+            setActiveMenu("rendiciones");
+            setShowMenuModal(false);
+          }}
+          highlight
+        />
+        <MenuItem
+          label="Saldos"
+          icon="💰"
+          active={activeMenu === "saldos"}
+          onPress={() => {
+            setActiveMenu("saldos");
+            setShowMenuModal(false);
+          }}
+        />
+      </ScrollView>
+    </>
+  );
+
+  return (
+    <View style={dash.root}>
+      <View style={[dash.topbar, isMobile && dash.topbarMobile]}>
+        {isMobile ? (
+          <View style={dash.topbarRowMobile}>
+            <View style={dash.brandWrap}>
+              <Text style={dash.brand}>RindeCas</Text>
+            </View>
+            <View style={dash.topActionsMobile}>
+              <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
+                <Text style={dash.topBtnText}>{badgeCount > 0 ? `Noti (${badgeCount})` : "Noti"}</Text>
+              </Pressable>
+              <Pressable style={dash.topBtn} onPress={() => setShowMenuModal(true)}>
+                <Text style={dash.topBtnText}>Menu</Text>
+              </Pressable>
+              <Pressable style={[dash.topBtn, { backgroundColor: COLORS.orange }]} onPress={onLogout}>
+                <Text style={[dash.topBtnText, { color: "#fff" }]}>Salir</Text>
+              </Pressable>
             </View>
           </View>
+        ) : (
+          <>
+            <View style={dash.brandWrap}>
+              <Text style={dash.brand}>RindeCas</Text>
+            </View>
+            <View style={dash.topActions}>
+              <Pressable style={dash.topBtn} onPress={() => setShowNotiModal(true)}>
+                <Text style={dash.topBtnText}>{badgeCount > 0 ? `Notificaciones (${badgeCount})` : "Notificaciones"}</Text>
+              </Pressable>
+              <Pressable style={dash.topBtn}>
+                <Text style={dash.topBtnText}>Inicio</Text>
+              </Pressable>
+              <Pressable style={[dash.topBtn, { backgroundColor: COLORS.orange }]} onPress={onLogout}>
+                <Text style={[dash.topBtnText, { color: "#fff" }]}>Salir</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </View>
 
-          <View style={dash.menuTitleWrap}>
-            <Text style={dash.menuTitle}>OPCIONES</Text>
+      <View style={[dash.body, isMobile && dash.bodyMobile]}>
+        {!isMobile ? (
+          <View style={dash.sidebar}>
+            <SidebarContent />
           </View>
-          <MenuItem
-            label={badgeCount > 0 ? `Rendiciones (${badgeCount})` : "Rendiciones"}
-            icon="🧾"
-            active={activeMenu === "rendiciones"}
-            onPress={() => setActiveMenu("rendiciones")}
-            highlight
-          />
-          <MenuItem label="Saldos" icon="💰" active={activeMenu === "saldos"} onPress={() => setActiveMenu("saldos")} />
-        </View>
+        ) : null}
 
-        <View style={dash.content}>
+        <View style={[dash.content, isMobile && dash.contentMobile]}>
           <ContadoraRendiciones token={token} viewMode={activeMenu === "saldos" ? "saldos" : "rendiciones"} />
         </View>
       </View>
+
+      <Modal transparent visible={showMenuModal} animationType="slide" onRequestClose={() => setShowMenuModal(false)}>
+        <Pressable style={dash.drawerOverlay} onPress={() => setShowMenuModal(false)}>
+          <Pressable style={dash.drawerPanel} onPress={() => null}>
+            <View style={dash.drawerHeaderRow}>
+              <Text style={{ color: COLORS.blue2, fontWeight: "900", fontSize: 16 }}>Menu</Text>
+              <Pressable style={dash.drawerCloseBtn} onPress={() => setShowMenuModal(false)}>
+                <Text style={dash.drawerCloseText}>Cerrar</Text>
+              </Pressable>
+            </View>
+            <SidebarContent />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal transparent visible={showNotiModal} animationType="fade" onRequestClose={() => setShowNotiModal(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.25)", justifyContent: "center", alignItems: "center", padding: 16 }}>
@@ -114,10 +177,7 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
                 <Pressable style={dash.docBtn} onPress={loadNotificaciones}>
                   <Text style={dash.docBtnText}>Actualizar</Text>
                 </Pressable>
-                <Pressable
-                  style={dash.docBtn}
-                  onPress={() => setHiddenNotiIds(hideNotifications("contadora", visibleNotificaciones))}
-                >
+                <Pressable style={dash.docBtn} onPress={() => setHiddenNotiIds(hideNotifications("contadora", visibleNotificaciones))}>
                   <Text style={dash.docBtnText}>Marcar todo leido</Text>
                 </Pressable>
                 <Pressable style={dash.docBtn} onPress={() => setShowNotiModal(false)}>
@@ -137,13 +197,7 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
                       {n?.rendicionId ? ` | Rendicion #${n.rendicionId}` : ""}
                     </Text>
                     {!!n?.mensaje ? <Text style={{ color: COLORS.muted, fontWeight: "700", fontSize: 12 }}>{n.mensaje}</Text> : null}
-                    <Pressable
-                      style={[dash.docBtn, { marginTop: 6 }]}
-                      onPress={() => {
-                        setShowNotiModal(false);
-                        setActiveMenu("rendiciones");
-                      }}
-                    >
+                    <Pressable style={[dash.docBtn, { marginTop: 6 }]} onPress={() => { setShowNotiModal(false); setActiveMenu("rendiciones"); }}>
                       <Text style={dash.docBtnText}>Ir a rendiciones</Text>
                     </Pressable>
                   </View>

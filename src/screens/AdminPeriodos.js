@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
@@ -9,6 +9,8 @@ import { apiDelete, apiGet, apiPost, apiPut } from "../api/httpClient";
 
 // Admin Periodos: CRUD de periodos semanales
 export default function AdminPeriodos({ token }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -211,8 +213,8 @@ export default function AdminPeriodos({ token }) {
           style={dash.input}
         />
 
-        <View style={styles.row}>
-          <View style={styles.col}>
+        <View style={[styles.row, isMobile && styles.rowMobile]}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Fecha inicio (lunes)</Text>
             <TextInput
               value={form.fechaInicio}
@@ -222,7 +224,7 @@ export default function AdminPeriodos({ token }) {
               style={dash.input}
             />
           </View>
-          <View style={styles.col}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Fecha termino (viernes)</Text>
             <TextInput
               value={form.fechaTermino}
@@ -234,8 +236,8 @@ export default function AdminPeriodos({ token }) {
           </View>
         </View>
 
-        <View style={styles.row}>
-          <View style={styles.col}>
+        <View style={[styles.row, isMobile && styles.rowMobile]}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Dias limite rendicion</Text>
             <TextInput
               value={form.diasLimiteRendicion}
@@ -245,7 +247,7 @@ export default function AdminPeriodos({ token }) {
               style={dash.input}
             />
           </View>
-          <View style={styles.col}>
+          <View style={[styles.col, isMobile && styles.colMobile]}>
             <Text style={dash.label}>Activo</Text>
             <View style={styles.toggleRow}>
               <Pressable
@@ -264,7 +266,7 @@ export default function AdminPeriodos({ token }) {
           </View>
         </View>
 
-        <View style={styles.btnRow}>
+        <View style={[styles.btnRow, isMobile && styles.btnRowMobile]}>
           <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>{loading ? "Guardando..." : "Guardar"}</Text>
           </Pressable>
@@ -309,16 +311,16 @@ export default function AdminPeriodos({ token }) {
               </Pressable>
             </View>
           </View>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
+          <View style={[styles.summaryRow, isMobile && styles.summaryRowMobile]}>
+            <View style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}>
               <Text style={styles.summaryLabel}>Semanas</Text>
               <Text style={styles.summaryValue}>{summary.total}</Text>
             </View>
-            <View style={styles.summaryCard}>
+            <View style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}>
               <Text style={styles.summaryLabel}>Activas</Text>
               <Text style={styles.summaryValue}>{summary.activas}</Text>
             </View>
-            <View style={styles.summaryCard}>
+            <View style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}>
               <Text style={styles.summaryLabel}>Inactivas</Text>
               <Text style={styles.summaryValue}>{summary.inactivas}</Text>
             </View>
@@ -328,13 +330,13 @@ export default function AdminPeriodos({ token }) {
         {filteredItems.length === 0 ? (
           <Text style={styles.empty}>No hay semanas para este mes.</Text>
         ) : (
-          <View style={styles.cardsGrid}>
+          <View style={[styles.cardsGrid, isMobile && styles.cardsGridMobile]}>
             {filteredItems.map((p) => {
               const fi = String(p.fechaInicio).slice(0, 10);
               const ft = String(p.fechaTermino).slice(0, 10);
               return (
-                <View key={p.id} style={styles.weekCard}>
-                  <View style={styles.weekHeader}>
+                <View key={p.id} style={[styles.weekCard, isMobile && styles.weekCardMobile]}>
+                  <View style={[styles.weekHeader, isMobile && styles.weekHeaderMobile]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.weekTitle}>{p.nombre}</Text>
                       <Text style={styles.weekSub}>
@@ -348,7 +350,7 @@ export default function AdminPeriodos({ token }) {
                     </View>
                   </View>
                   <Text style={styles.weekMeta}>Dias limite: {p.diasLimiteRendicion}</Text>
-                  <View style={styles.actions}>
+                  <View style={[styles.actions, isMobile && styles.actionsMobile]}>
                     <Pressable style={styles.smallBtn} onPress={() => onEdit(p)} disabled={loading}>
                       <Text style={styles.smallBtnText}>Editar</Text>
                     </Pressable>
@@ -368,7 +370,9 @@ export default function AdminPeriodos({ token }) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 12, marginTop: 12 },
+  rowMobile: { flexDirection: "column" },
   col: { flex: 1 },
+  colMobile: { width: "100%" },
   toggleRow: { flexDirection: "row", gap: 8 },
   toggleBtn: {
     flex: 1,
@@ -383,7 +387,8 @@ const styles = StyleSheet.create({
   toggleBtnActive: { backgroundColor: "#E8F0FF", borderColor: "#BFD4FF" },
   toggleText: { fontWeight: "900", color: COLORS.text },
   toggleTextActive: { color: COLORS.blue2 },
-  btnRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
+  btnRowMobile: { flexDirection: "column", alignItems: "stretch" },
   primaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -449,6 +454,7 @@ const styles = StyleSheet.create({
   yearBtnText: { fontWeight: "900", color: COLORS.blue2 },
   yearValue: { fontWeight: "900", color: COLORS.text },
   summaryRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  summaryRowMobile: { flexDirection: "column" },
   summaryCard: {
     flex: 1,
     backgroundColor: "#F7FAFF",
@@ -457,9 +463,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
   },
+  summaryCardMobile: { width: "100%" },
   summaryLabel: { fontWeight: "800", color: COLORS.muted, fontSize: 12 },
   summaryValue: { fontWeight: "900", color: COLORS.text, fontSize: 18, marginTop: 4 },
   cardsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  cardsGridMobile: { flexDirection: "column" },
   weekCard: {
     width: 320,
     borderWidth: 1,
@@ -468,7 +476,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 12,
   },
+  weekCardMobile: { width: "100%" },
   weekHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  weekHeaderMobile: { flexDirection: "column", alignItems: "flex-start" },
   weekTitle: { fontWeight: "900", color: COLORS.text },
   weekSub: { marginTop: 4, color: COLORS.muted, fontWeight: "700" },
   weekMeta: { marginTop: 8, color: COLORS.muted, fontWeight: "800" },
@@ -481,7 +491,8 @@ const styles = StyleSheet.create({
   statusActive: { backgroundColor: "#E7F8ED", borderColor: "#BFE8CB" },
   statusInactive: { backgroundColor: "#FFEFEF", borderColor: "#F3B6B6" },
   statusText: { fontWeight: "900", color: COLORS.text },
-  actions: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  actionsMobile: { flexDirection: "column", alignItems: "stretch" },
   smallBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -500,5 +511,6 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
+
 
 

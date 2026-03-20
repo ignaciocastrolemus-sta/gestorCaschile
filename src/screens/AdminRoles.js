@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useCallback } from "react";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
@@ -10,6 +10,8 @@ import { apiDelete, apiGet, apiPost, apiPut } from "../api/httpClient";
 // Admin Roles: crear/editar/eliminar roles
 
 export default function AdminRoles({ token, title }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [roles, setRoles] = useState([]);
   const [userCounts, setUserCounts] = useState({});
   const [usersByRole, setUsersByRole] = useState({});
@@ -162,7 +164,7 @@ export default function AdminRoles({ token, title }) {
           placeholderTextColor={COLORS.muted}
           style={dash.input}
         />
-        <View style={styles.btnRow}>
+        <View style={[styles.btnRow, isMobile && styles.btnRowMobile]}>
           <Pressable style={[styles.primaryBtn, loading && { opacity: 0.7 }]} onPress={onSave} disabled={loading}>
             <Text style={styles.primaryText}>
               {loading ? "Guardando..." : editing ? "Guardar cambios" : "Crear rol"}
@@ -204,7 +206,7 @@ export default function AdminRoles({ token, title }) {
               const miembros = usersByRole[rol.id] || [];
               const isExpanded = expandedRoleId === rol.id;
               return (
-                <View key={rol.id} style={styles.card}>
+                <View key={rol.id} style={[styles.card, isMobile && styles.cardMobile]}>
                   <View style={styles.cardLeft}>
                     <Text style={styles.cardTitle}>{nombre}</Text>
                     <View style={styles.metaRow}>
@@ -237,7 +239,7 @@ export default function AdminRoles({ token, title }) {
                       </View>
                     )}
                   </View>
-                  <View style={styles.actions}>
+                  <View style={[styles.actions, isMobile && styles.actionsMobile]}>
                     <Pressable
                       style={[styles.smallBtn, protegido && styles.smallBtnDisabled]}
                       onPress={() => onEdit(rol)}
@@ -260,7 +262,8 @@ export default function AdminRoles({ token, title }) {
 }
 
 const styles = StyleSheet.create({
-  btnRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
+  btnRowMobile: { flexDirection: "column", alignItems: "stretch" },
   primaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -301,6 +304,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
   },
+  cardMobile: { flexDirection: "column", alignItems: "flex-start", gap: 10 },
   cardLeft: { flex: 1, paddingRight: 10 },
   cardTitle: { fontWeight: "900", color: COLORS.text, fontSize: 15 },
   metaRow: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" },
@@ -344,7 +348,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   memberItem: { color: COLORS.text, fontWeight: "700", fontSize: 12 },
-  actions: { flexDirection: "row", gap: 8 },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  actionsMobile: { width: "100%", flexDirection: "column", alignItems: "stretch" },
   smallBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -366,3 +371,4 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
 });
+

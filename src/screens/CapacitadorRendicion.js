@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Platform } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
@@ -18,6 +18,8 @@ const CATEGORIAS = [
 ];
 
 export default function CapacitadorRendicion({ token, selectedViajeId, selectedContext }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
   const [viajes, setViajes] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [montos, setMontos] = useState({});
@@ -494,9 +496,9 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
           Adjunta documentos o imagenes que validen tus gastos. Debes rendir los montos asignados.
         </Text>
 
-        <View style={styles.cardRow}>
+        <View style={[styles.cardRow, isMobile && styles.cardRowMobile]}>
           {asignacionesPorDia.map((item) => (
-            <View key={item.key} style={styles.miniCard}>
+            <View key={item.key} style={[styles.miniCard, isMobile && styles.miniCardMobile]}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>{item.label}</Text>
                 <Text style={styles.cardAmount}>$ {item.monto.toLocaleString("es-CL")}</Text>
@@ -601,7 +603,7 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
         </View>
       </View>
 
-      <View style={styles.alertBox}>
+      <View style={[styles.alertBox, isMobile && styles.alertBoxMobile]}>
         <Text style={styles.alertText}>
           Puedes enviar con diferencia. Si rindes mas, queda reembolso; si rindes menos, queda saldo por
           devolver.
@@ -777,6 +779,7 @@ const styles = StyleSheet.create({
   },
   showMoreText: { fontWeight: "900", color: COLORS.blue2 },
   cardRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  cardRowMobile: { flexDirection: "column" },
   miniCard: {
     width: 220,
     borderWidth: 1,
@@ -785,6 +788,7 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#fff",
   },
+  miniCardMobile: { width: "100%" },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
   cardTitle: { fontWeight: "900", color: COLORS.blue2 },
   cardAmount: { fontWeight: "900", color: COLORS.text },
@@ -822,6 +826,37 @@ const styles = StyleSheet.create({
     borderColor: "#BFE8CB",
   },
   totalViajeValue: { fontWeight: "900", color: COLORS.text },
+  mobileList: { marginTop: 8, gap: 10 },
+  mobileCard: {
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#fff",
+  },
+  mobileCardTitle: { fontWeight: "900", color: COLORS.text, fontSize: 15 },
+  mobileCardStats: { marginTop: 10, gap: 8 },
+  mobileStatItem: {
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#F8FAFF",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  mobileStatLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 11 },
+  mobileStatValue: { color: COLORS.text, fontWeight: "900", marginTop: 2, fontSize: 13 },
+  mobileMontoInput: {
+    height: 40,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    color: COLORS.text,
+    backgroundColor: "#fff",
+  },
+  mobileAttachActions: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 10 },
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 1,
@@ -901,6 +936,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   alertText: { flex: 1, fontWeight: "700", color: COLORS.text },
+  alertBoxMobile: { alignItems: "stretch" },
   sendBtn: {
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -914,3 +950,4 @@ const styles = StyleSheet.create({
   errorText: { color: COLORS.muted, fontWeight: "700" },
   messageText: { color: COLORS.muted, fontWeight: "800", marginBottom: 12 },
 });
+

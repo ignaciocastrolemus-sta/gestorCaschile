@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, TextInput, StyleSheet } from "react-native";
+﻿import React from "react";
+import { View, Text, TextInput, StyleSheet, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { COLORS } from "../constants/colors";
 
@@ -47,12 +47,16 @@ export function Select({ value, onValueChange, items = [] }) {
   );
 }
 
-export function Row({ children, gap = 12 }) {
-  return <View style={[styles.row, { gap }]}>{children}</View>;
+export function Row({ children, gap = 12, style, stackOnMobile = true }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
+  return <View style={[styles.row, { gap }, stackOnMobile && isMobile && styles.rowStack, style]}>{children}</View>;
 }
 
-export function Col({ children, flex = 1 }) {
-  return <View style={{ flex }}>{children}</View>;
+export function Col({ children, flex = 1, style }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 900;
+  return <View style={[{ flex }, isMobile && styles.colStack, style]}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -99,4 +103,6 @@ const styles = StyleSheet.create({
   },
 
   row: { flexDirection: "row", alignItems: "center" },
+  rowStack: { flexDirection: "column", alignItems: "stretch" },
+  colStack: { width: "100%" },
 });
