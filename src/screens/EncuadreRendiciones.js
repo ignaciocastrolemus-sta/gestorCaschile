@@ -47,6 +47,11 @@ const MONTH_LABELS = {
   "12": "Diciembre",
 };
 
+const MONTH_ITEMS = [
+  { label: "Todos", value: "todos" },
+  ...Object.entries(MONTH_LABELS).map(([value, label]) => ({ label, value })),
+];
+
 const getPeriodoLabel = (value) => {
   if (!value) return "Sin fecha";
   const d = new Date(value);
@@ -55,6 +60,19 @@ const getPeriodoLabel = (value) => {
     month: "long",
     year: "numeric",
   });
+};
+
+const toDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const formatPeriodoOptionLabel = (periodo) => {
+  const nombre = periodo?.nombre ?? periodo?.Nombre ?? "Semana";
+  const inicio = fmtDate(periodo?.fechaInicio ?? periodo?.FechaInicio);
+  const termino = fmtDate(periodo?.fechaTermino ?? periodo?.FechaTermino);
+  return inicio && termino ? `${nombre} (${inicio} - ${termino})` : nombre;
 };
 
 const getSaldoPendienteAbierto = (item) => {
@@ -142,6 +160,7 @@ export default function EncuadreRendiciones({ token }) {
     }
   }, []);
   const [items, setItems] = useState([]);
+  const [periodos, setPeriodos] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -149,6 +168,7 @@ export default function EncuadreRendiciones({ token }) {
   const [filtro, setFiltro] = useState({
     mes: persisted?.filtro?.mes || defaultMes,
     anio: persisted?.filtro?.anio || defaultAnio,
+    periodoId: persisted?.filtro?.periodoId || "todos",
     capacitador: persisted?.filtro?.capacitador || "todos",
     estado: persisted?.filtro?.estado || "todos",
     saldoVista: persisted?.filtro?.saldoVista || "todos",
@@ -156,6 +176,7 @@ export default function EncuadreRendiciones({ token }) {
   const [draftFiltro, setDraftFiltro] = useState({
     mes: persisted?.draftFiltro?.mes || defaultMes,
     anio: persisted?.draftFiltro?.anio || defaultAnio,
+    periodoId: persisted?.draftFiltro?.periodoId || "todos",
     capacitador: persisted?.draftFiltro?.capacitador || "todos",
     estado: persisted?.draftFiltro?.estado || "todos",
     saldoVista: persisted?.draftFiltro?.saldoVista || "todos",
@@ -166,13 +187,17 @@ export default function EncuadreRendiciones({ token }) {
   const [saldoMovimientos, setSaldoMovimientos] = useState([]);
   const [saldoLoading, setSaldoLoading] = useState(false);
 
-  // Mantiene la consulta base al backend y deja los filtros rapidos  en frontend.
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
       if (!token) return;
-      const res = await fetch(API_URL, {
+      const params = new URLSearchParams();
+      if (filtro.mes !== "todos") params.set("mes", String(Number(filtro.mes)));
+      if (filtro.anio !== "todos") params.set("anio", filtro.anio);
+      if (filtro.periodoId !== "todos") params.set("periodoId", filtro.periodoId);
+      const url = params.toString() ? `${API_URL}?${params.toString()}` : API_URL;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
@@ -183,38 +208,104 @@ export default function EncuadreRendiciones({ token }) {
     } finally {
       setLoading(false);
     }
+  }, [filtro.anio, filtro.mes, filtro.periodoId, token]);
+
+  const loadPeriodos = useCallback(async () => {
+    try {
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/Periodos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setPeriodos(Array.isArray(data) ? data : []);
+    } catch {
+      setPeriodos([]);
+    }
   }, [token]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    loadPeriodos();
+  }, [loadPeriodos]);
+
   const onChange = (k, v) => setDraftFiltro((prev) => ({ ...prev, [k]: v }));
+
+  const yearItems = useMemo(() => {
+    const anios = new Set();
+    periodos.forEach((p) => {
+      const d = toDate(p?.fechaInicio ?? p?.FechaInicio);
+      if (d) anios.add(String(d.getFullYear()));
+    });
+    if (anios.size === 0) anios.add(defaultAnio);
+    return ["todos", ...Array.from(anios).sort((a, b) => Number(b) - Number(a))];
+  }, [defaultAnio, periodos]);
+
+  const periodosItemsByMonth = useMemo(() => {
+    if (draftFiltro.mes === "todos" || draftFiltro.anio === "todos") return [];
+    return periodos
+      .filter((p) => {
+        const d = toDate(p?.fechaInicio ?? p?.FechaInicio);
+        if (!d) return false;
+        return d.getFullYear() === Number(draftFiltro.anio) && String(d.getMonth() + 1).padStart(2, "0") === draftFiltro.mes;
+      })
+      .sort((a, b) => {
+        const fa = toDate(a?.fechaInicio ?? a?.FechaInicio)?.getTime() || 0;
+        const fb = toDate(b?.fechaInicio ?? b?.FechaInicio)?.getTime() || 0;
+        return fa - fb;
+      })
+      .map((p) => ({
+        label: formatPeriodoOptionLabel(p),
+        value: String(p?.id ?? p?.Id ?? ""),
+        activo: (p?.activo ?? p?.Activo) === true,
+      }))
+      .filter((p) => p.value);
+  }, [draftFiltro.anio, draftFiltro.mes, periodos]);
+
+  const appliedPeriodosItemsByMonth = useMemo(() => {
+    if (filtro.mes === "todos" || filtro.anio === "todos") return [];
+    return periodos
+      .filter((p) => {
+        const d = toDate(p?.fechaInicio ?? p?.FechaInicio);
+        if (!d) return false;
+        return d.getFullYear() === Number(filtro.anio) && String(d.getMonth() + 1).padStart(2, "0") === filtro.mes;
+      })
+      .map((p) => ({
+        label: formatPeriodoOptionLabel(p),
+        value: String(p?.id ?? p?.Id ?? ""),
+      }))
+      .filter((p) => p.value);
+  }, [filtro.anio, filtro.mes, periodos]);
+
+  const selectedPeriodoLabel = useMemo(() => {
+    if (filtro.periodoId === "todos") return "Todas";
+    const periodoEncontrado = periodos.find((p) => String(p?.id ?? p?.Id ?? "") === String(filtro.periodoId));
+    return (
+      appliedPeriodosItemsByMonth.find((p) => p.value === filtro.periodoId)?.label ||
+      (periodoEncontrado ? formatPeriodoOptionLabel(periodoEncontrado) : `Semana #${filtro.periodoId}`)
+    );
+  }, [appliedPeriodosItemsByMonth, filtro.periodoId, periodos]);
 
   // Opciones dinamicas para filtros.
   const opciones = useMemo(() => {
-    const meses = new Set();
-    const anios = new Set();
     const capacitadores = new Set();
     const estados = new Set();
 
     items.forEach((it) => {
-      const d = new Date(it?.viaje?.fechaInicio);
-      if (!Number.isNaN(d.getTime())) {
-        meses.add(String(d.getMonth() + 1).padStart(2, "0"));
-        anios.add(String(d.getFullYear()));
-      }
       capacitadores.add(it?.viaje?.capacitador || "-");
       estados.add(it?.estado || "-");
     });
 
     return {
-      meses: ["todos", ...Array.from(meses).sort((a, b) => Number(a) - Number(b))],
-      anios: ["todos", ...Array.from(anios).sort((a, b) => Number(b) - Number(a))],
+      meses: MONTH_ITEMS.map((item) => item.value),
+      anios: yearItems,
       capacitadores: ["todos", ...Array.from(capacitadores).sort((a, b) => a.localeCompare(b, "es"))],
       estados: ["todos", ...Array.from(estados).sort((a, b) => a.localeCompare(b, "es"))],
     };
-  }, [items]);
+  }, [items, yearItems]);
 
   useEffect(() => {
     if (!opciones.meses.includes(draftFiltro.mes) || !opciones.meses.includes(filtro.mes)) {
@@ -227,6 +318,17 @@ export default function EncuadreRendiciones({ token }) {
     }
   }, [opciones.meses, opciones.anios, draftFiltro.mes, draftFiltro.anio, filtro.mes, filtro.anio]);
 
+  useEffect(() => {
+    if (draftFiltro.periodoId !== "todos" && !periodosItemsByMonth.some((p) => p.value === draftFiltro.periodoId)) {
+      setDraftFiltro((prev) => ({ ...prev, periodoId: "todos" }));
+    }
+  }, [draftFiltro.periodoId, periodosItemsByMonth]);
+
+  useEffect(() => {
+    if (filtro.periodoId !== "todos" && !appliedPeriodosItemsByMonth.some((p) => p.value === filtro.periodoId)) {
+      setFiltro((prev) => ({ ...prev, periodoId: "todos" }));
+    }
+  }, [filtro.periodoId, appliedPeriodosItemsByMonth, periodos]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -242,12 +344,14 @@ export default function EncuadreRendiciones({ token }) {
       const d = new Date(it?.viaje?.fechaInicio);
       const mes = !Number.isNaN(d.getTime()) ? String(d.getMonth() + 1).padStart(2, "0") : "sin";
       const anio = !Number.isNaN(d.getTime()) ? String(d.getFullYear()) : "sin";
+      const periodoId = String(it?.viaje?.periodoId ?? "sin");
       const capacitador = it?.viaje?.capacitador || "-";
       const estado = it?.estado || "-";
       const q = normalize(search);
 
       const okMes = filtro.mes === "todos" || filtro.mes === mes;
       const okAnio = filtro.anio === "todos" || filtro.anio === anio;
+      const okPeriodo = filtro.periodoId === "todos" || filtro.periodoId === periodoId;
       const okCapacitador =
         filtro.capacitador === "todos" || normalize(filtro.capacitador) === normalize(capacitador);
       const okEstado = filtro.estado === "todos" || normalize(filtro.estado) === normalize(estado);
@@ -264,7 +368,7 @@ export default function EncuadreRendiciones({ token }) {
           .join(" ")
       );
       const okBusqueda = !q || searchable.includes(q);
-      return okMes && okAnio && okCapacitador && okEstado && okBusqueda;
+      return okMes && okAnio && okPeriodo && okCapacitador && okEstado && okBusqueda;
     });
   }, [items, filtro, search]);
 
@@ -333,7 +437,7 @@ export default function EncuadreRendiciones({ token }) {
   };
 
   const limpiarFiltros = () => {
-    const base = { mes: defaultMes, anio: defaultAnio, capacitador: "todos", estado: "todos", saldoVista: "todos" };
+    const base = { mes: defaultMes, anio: defaultAnio, periodoId: "todos", capacitador: "todos", estado: "todos", saldoVista: "todos" };
     setDraftFiltro(base);
     setFiltro(base);
     setSearch("");
@@ -377,6 +481,7 @@ export default function EncuadreRendiciones({ token }) {
       [csvCell("Fecha de generacion"), csvCell(new Date().toLocaleString("es-CL"))].join(sep),
       [csvCell("Filtro mes"), csvCell(filtro.mes === "todos" ? "Todos" : MONTH_LABELS[filtro.mes] || filtro.mes)].join(sep),
       [csvCell("Filtro año"), csvCell(filtro.anio === "todos" ? "Todos" : filtro.anio)].join(sep),
+      [csvCell("Filtro semana"), csvCell(selectedPeriodoLabel)].join(sep),
       [csvCell("Filtro capacitador"), csvCell(filtro.capacitador)].join(sep),
       [csvCell("Filtro estado"), csvCell(filtro.estado)].join(sep),
       [csvCell("Filtro busqueda"), csvCell(search || "Sin filtro")].join(sep),
@@ -479,6 +584,7 @@ export default function EncuadreRendiciones({ token }) {
           <div class="meta"><b>Fecha:</b> ${esc(new Date().toLocaleString("es-CL"))}</div>
           <div class="meta"><b>Filtro mes:</b> ${esc(filtro.mes === "todos" ? "Todos" : MONTH_LABELS[filtro.mes] || filtro.mes)}</div>
           <div class="meta"><b>Filtro año:</b> ${esc(filtro.anio === "todos" ? "Todos" : filtro.anio)}</div>
+          <div class="meta"><b>Filtro semana:</b> ${esc(selectedPeriodoLabel)}</div>
           <div class="meta"><b>Filtro capacitador:</b> ${esc(filtro.capacitador)}</div>
           <div class="meta"><b>Filtro estado:</b> ${esc(filtro.estado)}</div>
           <div class="meta"><b>Filtro busqueda:</b> ${esc(search || "Sin filtro")}</div>
@@ -529,6 +635,7 @@ export default function EncuadreRendiciones({ token }) {
         { label: "Fecha", value: new Date().toLocaleString("es-CL") },
         { label: "Filtro mes", value: filtro.mes === "todos" ? "Todos" : MONTH_LABELS[filtro.mes] || filtro.mes },
         { label: "Filtro año", value: filtro.anio === "todos" ? "Todos" : filtro.anio },
+        { label: "Filtro semana", value: selectedPeriodoLabel },
         { label: "Filtro capacitador", value: filtro.capacitador },
         { label: "Filtro estado", value: filtro.estado },
         { label: "Filtro busqueda", value: search || "Sin filtro" },
@@ -656,6 +763,28 @@ export default function EncuadreRendiciones({ token }) {
                 ))}
               </Picker>
             </View>
+          </View>
+          <View style={styles.chipBox}>
+            <Text style={styles.chipLabel}>Semana</Text>
+            <View style={styles.selectWrap}>
+              <Picker
+                selectedValue={draftFiltro.periodoId}
+                onValueChange={(v) => onChange("periodoId", v)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Todas" value="todos" />
+                {periodosItemsByMonth.map((p) => (
+                  <Picker.Item key={p.value} label={p.label} value={p.value} />
+                ))}
+              </Picker>
+            </View>
+            <Text style={styles.helperText}>
+              {draftFiltro.mes === "todos" || draftFiltro.anio === "todos"
+                ? "Selecciona mes y año para listar semanas."
+                : periodosItemsByMonth.length
+                  ? `${MONTH_LABELS[draftFiltro.mes]} ${draftFiltro.anio}: ${periodosItemsByMonth.length} semana(s) disponibles`
+                  : `${MONTH_LABELS[draftFiltro.mes]} ${draftFiltro.anio}: sin semanas definidas`}
+            </Text>
           </View>
           <View style={styles.chipBox}>
             <Text style={styles.chipLabel}>Capacitador</Text>
@@ -987,6 +1116,12 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     marginBottom: 6,
   },
+  helperText: {
+    marginTop: 6,
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: "700",
+  },
   selectWrap: {
     height: 42,
     borderWidth: 1,
@@ -1243,4 +1378,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

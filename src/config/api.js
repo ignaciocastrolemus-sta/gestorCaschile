@@ -5,9 +5,16 @@
 const ENV_API_BASE =
   (typeof process !== "undefined" && process.env && process.env.EXPO_PUBLIC_API_BASE) || "";
 
-const DEFAULT_DEV_API_BASE = "http://localhost:5067/api";
-const DEFAULT_PROD_API_BASE = "https://api.tu-dominio.cl/api";
+const DEFAULT_DEV_API_BASE = "http://192.168.10.117:8086/api";
+const DEFAULT_PROD_API_BASE = "http://192.168.10.117:8086/api";
 
 const baseUrl = ENV_API_BASE || (__DEV__ ? DEFAULT_DEV_API_BASE : DEFAULT_PROD_API_BASE);
 
 export const API_BASE = String(baseUrl).replace(/\/+$/, "");
+
+
+
+
+
+
+

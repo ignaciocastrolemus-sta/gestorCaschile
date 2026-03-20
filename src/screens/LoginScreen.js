@@ -3,6 +3,27 @@ import { View, Text, TextInput, Pressable, Image } from "react-native";
 import { COLORS } from "../constants/colors";
 import styles from "../styles/loginStyles";
 
+function PasswordField({ label, value, onChangeText, placeholder, visible, onToggle }) {
+  return (
+    <>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
+      <View style={styles.passwordWrap}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={COLORS.muted}
+          secureTextEntry={!visible}
+          style={[styles.input, styles.passwordInput]}
+        />
+        <Pressable style={styles.passwordToggle} onPress={onToggle}>
+          <Text style={styles.passwordToggleText}>{visible ? "Ocultar" : "Mostrar"}</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
 export default function LoginScreen({
   email,
   pass,
@@ -31,6 +52,12 @@ export default function LoginScreen({
   setForceConfirm,
   onForceChange,
 }) {
+  const [showLoginPass, setShowLoginPass] = React.useState(false);
+  const [showForceCurrent, setShowForceCurrent] = React.useState(false);
+  const [showForceNew, setShowForceNew] = React.useState(false);
+  const [showForceConfirm, setShowForceConfirm] = React.useState(false);
+  const [showResetPass, setShowResetPass] = React.useState(false);
+
   return (
     <View style={styles.root}>
       <View style={styles.bgBase} />
@@ -67,14 +94,13 @@ export default function LoginScreen({
               style={styles.input}
             />
 
-            <Text style={styles.label}>Contrasena</Text>
-            <TextInput
+            <PasswordField
+              label="Contrasena"
               value={pass}
               onChangeText={setPass}
               placeholder="********"
-              placeholderTextColor={COLORS.muted}
-              secureTextEntry
-              style={styles.input}
+              visible={showLoginPass}
+              onToggle={() => setShowLoginPass((prev) => !prev)}
             />
 
             <Pressable style={styles.button} onPress={onLogin}>
@@ -90,29 +116,26 @@ export default function LoginScreen({
         {forceChange && (
           <View style={styles.resetBox}>
             <Text style={styles.resetTitle}>Cambiar contrasena obligatoria</Text>
-            <TextInput
+            <PasswordField
               value={forceCurrent}
               onChangeText={setForceCurrent}
               placeholder="Contrasena actual"
-              placeholderTextColor={COLORS.muted}
-              secureTextEntry
-              style={styles.input}
+              visible={showForceCurrent}
+              onToggle={() => setShowForceCurrent((prev) => !prev)}
             />
-            <TextInput
+            <PasswordField
               value={forceNew}
               onChangeText={setForceNew}
               placeholder="Nueva contrasena"
-              placeholderTextColor={COLORS.muted}
-              secureTextEntry
-              style={styles.input}
+              visible={showForceNew}
+              onToggle={() => setShowForceNew((prev) => !prev)}
             />
-            <TextInput
+            <PasswordField
               value={forceConfirm}
               onChangeText={setForceConfirm}
               placeholder="Confirmar nueva contrasena"
-              placeholderTextColor={COLORS.muted}
-              secureTextEntry
-              style={styles.input}
+              visible={showForceConfirm}
+              onToggle={() => setShowForceConfirm((prev) => !prev)}
             />
             <Pressable style={styles.secondaryBtn} onPress={onForceChange}>
               <Text style={styles.secondaryBtnText}>Actualizar contrasena</Text>
@@ -147,13 +170,12 @@ export default function LoginScreen({
               placeholderTextColor={COLORS.muted}
               style={styles.input}
             />
-            <TextInput
+            <PasswordField
               value={resetPass}
               onChangeText={setResetPass}
               placeholder="Nueva contrasena"
-              placeholderTextColor={COLORS.muted}
-              secureTextEntry
-              style={styles.input}
+              visible={showResetPass}
+              onToggle={() => setShowResetPass((prev) => !prev)}
             />
             <Pressable style={styles.secondaryBtn} onPress={onConfirmReset}>
               <Text style={styles.secondaryBtnText}>Cambiar contrasena</Text>

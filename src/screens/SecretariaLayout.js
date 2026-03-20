@@ -108,27 +108,29 @@ export default function SecretariaLayout({
             <Text style={dash.menuTitle}>OPCIONES</Text>
           </View>
 
-          <MenuItem label="Ingresar gasto" icon="🧾" active={activeMenu === "gasto"} onPress={() => setActiveMenu("gasto")} highlight />
-          <MenuItem
-            label={badgeCount > 0 ? `Carpeta de viajes (${badgeCount})` : "Carpeta de viajes"}
-            icon="🗂️"
-            active={activeMenu === "carpeta"}
-            onPress={() => setActiveMenu("carpeta")}
-          />
-          <MenuItem label="Saldos" icon="💰" active={activeMenu === "saldos"} onPress={() => setActiveMenu("saldos")} />
-          <MenuItem
-            label="Asignaciones clientes"
-            icon="👥"
-            active={activeMenu === "semanal"}
-            onPress={() => setActiveMenu("semanal")}
-          />
-          <MenuItem
-            label="Transferencias"
-            icon="⇄"
-            active={activeMenu === "transfer"}
-            onPress={() => setActiveMenu("transfer")}
-          />
-          <MenuItem label="Encuadre" icon="📋" active={activeMenu === "encuadre"} onPress={() => setActiveMenu("encuadre")} />
+          <ScrollView style={dash.sidebarMenu} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator>
+            <MenuItem label="Ingresar gasto" icon="🧾" active={activeMenu === "gasto"} onPress={() => setActiveMenu("gasto")} highlight />
+            <MenuItem
+              label={badgeCount > 0 ? `Carpeta de viajes (${badgeCount})` : "Carpeta de viajes"}
+              icon="🗂️"
+              active={activeMenu === "carpeta"}
+              onPress={() => setActiveMenu("carpeta")}
+            />
+            <MenuItem label="Saldos" icon="💰" active={activeMenu === "saldos"} onPress={() => setActiveMenu("saldos")} />
+            <MenuItem
+              label="Asignaciones clientes"
+              icon="👥"
+              active={activeMenu === "semanal"}
+              onPress={() => setActiveMenu("semanal")}
+            />
+            <MenuItem
+              label="Transferencias"
+              icon="⇄"
+              active={activeMenu === "transfer"}
+              onPress={() => setActiveMenu("transfer")}
+            />
+            <MenuItem label="Encuadre" icon="📋" active={activeMenu === "encuadre"} onPress={() => setActiveMenu("encuadre")} />
+          </ScrollView>
         </View>
 
         <View style={dash.content}>
@@ -212,3 +214,4 @@ export default function SecretariaLayout({
     </View>
   );
 }
+
