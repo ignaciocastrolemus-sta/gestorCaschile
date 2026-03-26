@@ -1,6 +1,6 @@
-{
+﻿{
   "expo": {
-    "name": "Rinde-Cas",
+    "name": "RindeCas",
     "slug": "rinde-cas",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -27,3 +27,4 @@
     }
   }
 }
+

@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Modal, useWindowDimensions } from "react-native";
 import { useCallback } from "react";
 import { COLORS } from "../constants/colors";
 import PageHeader from "../components/PageHeader";
@@ -11,6 +11,7 @@ import { formatFechaCorta, formatRango, resolveMonthKey, resolveMonthLabel } fro
 import { quickFilterBtn, quickFilterText } from "../utils/quickFilterStyles";
 import {
   descargarAdjuntoRendicion,
+  obtenerHistorialContadora,
   justificarPendienteRendicion,
   levantarJustificacionRendicion,
   obtenerNotificacionesSaldo,
@@ -32,8 +33,10 @@ import { getHiddenNotificationIds, getVisibleNotifications, hideNotifications } 
 export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const { width } = useWindowDimensions();
   const compactUi = width < 1200;
+  const isMobile = width < 780;
   const [items, setItems] = useState([]);
   const [saldos, setSaldos] = useState([]);
+  const [historialRevisado, setHistorialRevisado] = useState([]);
   const [itemsPage, setItemsPage] = useState(1);
   const [itemsPageSize] = useState(20);
   const [itemsTotal, setItemsTotal] = useState(0);
@@ -48,10 +51,13 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [movLoadingById, setMovLoadingById] = useState({});
   const [movErrorById, setMovErrorById] = useState({});
   const [movOpenById, setMovOpenById] = useState({});
+  const [historyAdjuntosOpenById, setHistoryAdjuntosOpenById] = useState({});
+  const [reviewAdjuntosOpenById, setReviewAdjuntosOpenById] = useState({});
   const [revirtiendoByMovId, setRevirtiendoByMovId] = useState({});
   const [justificadas, setJustificadas] = useState([]);
   const [saldoOpenByCap, setSaldoOpenByCap] = useState({});
   const [historyOpenByCap, setHistoryOpenByCap] = useState({});
+  const [reviewOpenByCap, setReviewOpenByCap] = useState({});
   const [expandedCaps, setExpandedCaps] = useState({});
   const [visibleGroups, setVisibleGroups] = useState(6);
   const [historialMes, setHistorialMes] = useState("todos");
@@ -59,6 +65,11 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
   const [justificandoById, setJustificandoById] = useState({});
   const [levantandoById, setLevantandoById] = useState({});
   const [registrandoSaldoById, setRegistrandoSaldoById] = useState({});
+  const [pendientesQuery, setPendientesQuery] = useState("");
+  const [historialQuery, setHistorialQuery] = useState("");
+  const [historialRevisadoQuery, setHistorialRevisadoQuery] = useState("");
+  const [historialRevisadoEstado, setHistorialRevisadoEstado] = useState("Todos");
+  const [confirmacionResolucion, setConfirmacionResolucion] = useState(null);
   const [notificaciones, setNotificaciones] = useState([]);
   const [hiddenNotiIds, setHiddenNotiIds] = useState(() => getHiddenNotificationIds("contadora"));
   const [showNotificaciones, setShowNotificaciones] = useState(false);
@@ -146,19 +157,30 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     }
   }, [token]);
 
+  const loadHistorialRevisado = useCallback(async () => {
+    try {
+      const data = await obtenerHistorialContadora(token);
+      setHistorialRevisado(Array.isArray(data) ? data : []);
+    } catch {
+      setHistorialRevisado([]);
+    }
+  }, [token]);
+
   useEffect(() => {
     load(1);
     loadSaldos(1);
     loadJustificadas();
     loadNotificaciones();
-  }, [load, loadSaldos, loadJustificadas, loadNotificaciones]);
+    loadHistorialRevisado();
+  }, [load, loadSaldos, loadJustificadas, loadNotificaciones, loadHistorialRevisado]);
 
   const onActualizar = useCallback(() => {
     load(1);
     loadSaldos(1);
     loadJustificadas();
     loadNotificaciones();
-  }, [load, loadSaldos, loadJustificadas, loadNotificaciones]);
+    loadHistorialRevisado();
+  }, [load, loadSaldos, loadJustificadas, loadNotificaciones, loadHistorialRevisado]);
 
   const onDownload = async (adjuntoId, filename) => {
     try {
@@ -176,9 +198,10 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     }
   };
 
-  const onResolver = async (id, aprobar) => {
+  const onResolver = useCallback(async (id, aprobar) => {
     if (resolviendoById[id]) return;
     try {
+      setConfirmacionResolucion(null);
       setResolviendoById((prev) => ({ ...prev, [id]: true }));
       setActionMsg("");
       const mensaje = (msgById[id] || "").trim();
@@ -187,12 +210,13 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       setActionMsg(aprobar ? "Rendicion aprobada." : "Rendicion rechazada.");
       if (aprobar) loadSaldos(saldosPage);
       loadJustificadas();
+      loadHistorialRevisado();
     } catch (e) {
       setActionMsg(e?.message || "Error al resolver rendicion.");
     } finally {
       setResolviendoById((prev) => ({ ...prev, [id]: false }));
     }
-  };
+  }, [token, saldosPage, loadJustificadas, loadSaldos, loadHistorialRevisado, resolviendoById, msgById]);
 
   const onJustificar = async (id) => {
     if (justificandoById[id]) return;
@@ -265,6 +289,11 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     } finally {
       setMovLoadingById((prev) => ({ ...prev, [rendicionId]: false }));
     }
+  };
+
+  const onSolicitarResolucion = (rendicion, aprobar) => {
+    if (!rendicion?.id || resolviendoById[rendicion.id]) return;
+    setConfirmacionResolucion({ rendicion, aprobar });
   };
 
   const onToggleMovimientos = async (rendicionId) => {
@@ -363,15 +392,53 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     return saldosCerrados.filter((r) => resolveMonthKey(r?.saldoCerradoEn || r?.fechaEnvio) === historialMes);
   }, [saldosCerrados, historialMes]);
 
+  const historialQueryDebounced = useDebouncedValue(historialQuery, 250);
+  const historialRevisadoQueryDebounced = useDebouncedValue(historialRevisadoQuery, 250);
+
+  const saldosCerradosBusqueda = useMemo(() => {
+    const q = normalizeText(historialQueryDebounced);
+    if (!q) return saldosCerradosFiltrados;
+    return saldosCerradosFiltrados.filter((r) => {
+      const searchable = normalizeText(
+        `${r?.id || ""} ${r?.viaje?.capacitador || ""} ${r?.viaje?.municipio || ""} ${r?.viaje?.regionNombre || ""}`
+      );
+      return searchable.includes(q);
+    });
+  }, [saldosCerradosFiltrados, historialQueryDebounced]);
+
   const historialPorCapacitador = useMemo(() => {
     const map = new Map();
-    saldosCerradosFiltrados.forEach((r) => {
+    saldosCerradosBusqueda.forEach((r) => {
       const cap = r?.viaje?.capacitador || "Sin nombre";
       if (!map.has(cap)) map.set(cap, []);
       map.get(cap).push(r);
     });
     return Array.from(map.entries()).map(([capacitador, rows]) => ({ capacitador, rows }));
-  }, [saldosCerradosFiltrados]);
+  }, [saldosCerradosBusqueda]);
+
+  const historialRevisadoFiltrado = useMemo(() => {
+    const q = normalizeText(historialRevisadoQueryDebounced);
+    return (historialRevisado || []).filter((r) => {
+      if (historialRevisadoEstado !== "Todos" && String(r?.estado || "") !== historialRevisadoEstado) {
+        return false;
+      }
+      if (!q) return true;
+      const searchable = normalizeText(
+        `${r?.id || ""} ${r?.estado || ""} ${r?.viaje?.capacitador || ""} ${r?.viaje?.municipio || ""} ${r?.viaje?.regionNombre || ""}`
+      );
+      return searchable.includes(q);
+    });
+  }, [historialRevisado, historialRevisadoEstado, historialRevisadoQueryDebounced]);
+
+  const historialRevisadoPorCapacitador = useMemo(() => {
+    const map = new Map();
+    historialRevisadoFiltrado.forEach((r) => {
+      const cap = r?.viaje?.capacitador || "Sin nombre";
+      if (!map.has(cap)) map.set(cap, []);
+      map.get(cap).push(r);
+    });
+    return Array.from(map.entries()).map(([capacitador, rows]) => ({ capacitador, rows }));
+  }, [historialRevisadoFiltrado]);
 
   const exportSummary = useMemo(() => {
     const total = saldosCerradosFiltrados.length;
@@ -383,6 +450,13 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       .reduce((acc, r) => acc + resolveMontoSaldo(r), 0);
     return { total, favor, contra };
   }, [saldosCerradosFiltrados]);
+
+  const exportSummaryRevisado = useMemo(() => {
+    const total = historialRevisadoFiltrado.length;
+    const aprobadas = historialRevisadoFiltrado.filter((r) => String(r?.estado || "") === "Aprobada").length;
+    const rechazadas = historialRevisadoFiltrado.filter((r) => String(r?.estado || "") === "Rechazada").length;
+    return { total, aprobadas, rechazadas };
+  }, [historialRevisadoFiltrado]);
 
   const onExportHistorial = useCallback(
     (type) => {
@@ -424,7 +498,83 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
     [saldosCerradosFiltrados, historialMes, exportSummary]
   );
 
-  const pendientesAgrupados = useMemo(() => groupRendicionesByCapacitador(items), [items]);
+  const onExportHistorialRevisado = useCallback(
+    (type) => {
+      const rows = historialRevisadoFiltrado.map((r) => {
+        const totalAdjuntos = (r.detalles || []).reduce(
+          (acc, detalle) => acc + ((detalle.adjuntos || []).length || 0),
+          0
+        );
+        return [
+          { value: formatFechaCorta(r?.fechaEnvio) },
+          { value: r.id },
+          { value: r?.estado || "-" },
+          { value: r?.viaje?.capacitador || "-" },
+          { value: r?.viaje?.municipio || "-" },
+          { value: r?.viaje?.regionNombre || "-" },
+          { value: `$ ${Number(r?.totalRendido || 0).toLocaleString("es-CL")}`, align: "right" },
+          { value: totalAdjuntos },
+        ];
+      });
+      const config = {
+        title: "Historial de rendiciones revisadas",
+        subtitle: "Contadora - Rendiciones",
+        meta: [
+          { label: "Fecha de generacion", value: new Date().toLocaleString("es-CL") },
+          { label: "Estado", value: historialRevisadoEstado },
+        ],
+        summary: [
+          { label: "Registros", value: exportSummaryRevisado.total },
+          { label: "Aprobadas", value: exportSummaryRevisado.aprobadas },
+          { label: "Rechazadas", value: exportSummaryRevisado.rechazadas },
+        ],
+        headers: ["Fecha", "Rendicion", "Estado", "Capacitador", "Destino", "Region", "Total rendido", "Adjuntos"],
+        rows,
+      };
+      const ok =
+        type === "excel"
+          ? exportReportExcel({ fileName: "historial_rendiciones_revisadas_contadora.xls", ...config })
+          : exportReportPdf({ fileName: "historial_rendiciones_revisadas_contadora.pdf", ...config });
+      if (!ok) setActionMsg("La exportacion solo esta habilitada en web.");
+    },
+    [historialRevisadoFiltrado, historialRevisadoEstado, exportSummaryRevisado]
+  );
+
+  const pendientesQueryDebounced = useDebouncedValue(pendientesQuery, 250);
+
+  const pendientesFiltrados = useMemo(() => {
+    const q = normalizeText(pendientesQueryDebounced);
+    if (!q) return items;
+    return (items || []).filter((r) => {
+      const searchable = normalizeText(
+        `${r?.id || ""} ${r?.viaje?.capacitador || ""} ${r?.viaje?.municipio || ""} ${r?.viaje?.regionNombre || ""}`
+      );
+      return searchable.includes(q);
+    });
+  }, [items, pendientesQueryDebounced]);
+
+  const pendientesAgrupados = useMemo(
+    () => groupRendicionesByCapacitador(pendientesFiltrados),
+    [pendientesFiltrados]
+  );
+
+  const confirmacionResumen = useMemo(() => {
+    if (!confirmacionResolucion?.rendicion) return null;
+    const rendicion = confirmacionResolucion.rendicion;
+    const totalAdjuntos = (rendicion.detalles || []).reduce(
+      (acc, detalle) => acc + ((detalle.adjuntos || []).length || 0),
+      0
+    );
+    return {
+      totalAdjuntos,
+      totalRendido: Number(rendicion.totalRendido || 0),
+      accionLabel: confirmacionResolucion.aprobar ? "aprobar" : "rechazar",
+      accionBoton: confirmacionResolucion.aprobar ? "Si, aprobar rendicion" : "Si, rechazar rendicion",
+      subtitulo: confirmacionResolucion.aprobar
+        ? "Al aprobar, se registrara la resolucion financiera de esta rendicion."
+        : "Al rechazar, la rendicion volvera al capacitador para correccion.",
+    };
+  }, [confirmacionResolucion]);
 
   useEffect(() => {
     setVisibleGroups(6);
@@ -446,6 +596,16 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       return next;
     });
   }, [historialPorCapacitador]);
+
+  useEffect(() => {
+    setReviewOpenByCap((prev) => {
+      const next = {};
+      historialRevisadoPorCapacitador.forEach((g, idx) => {
+        next[g.capacitador] = prev[g.capacitador] ?? idx === 0;
+      });
+      return next;
+    });
+  }, [historialRevisadoPorCapacitador]);
 
   useEffect(() => {
     setSaldoOpenByCap((prev) => {
@@ -762,7 +922,17 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
             <Text style={styles.historyBtnText}>{compactUi ? "PDF" : "Descargar PDF"}</Text>
           </Pressable>
         </View>
-        {saldosCerradosFiltrados.length === 0 ? (
+        <View style={styles.searchWrap}>
+          <Text style={styles.searchLabel}>Buscar historial cerrado</Text>
+          <TextInput
+            value={historialQuery}
+            onChangeText={setHistorialQuery}
+            placeholder="Buscar por rendicion, capacitador o destino"
+            placeholderTextColor={COLORS.muted}
+            style={styles.input}
+          />
+        </View>
+        {saldosCerradosBusqueda.length === 0 ? (
           <Text style={styles.detailHint}>Aun no hay cierres registrados.</Text>
         ) : (
           historialPorCapacitador.map((grupo) => (
@@ -785,6 +955,10 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                     const tipo = resolveTipoResultado(r);
                     const fecha = formatFechaCorta(r?.saldoCerradoEn || r?.fechaEnvio);
                     const monto = resolveMontoSaldo(r);
+                    const totalAdjuntos = (r.detalles || []).reduce(
+                      (acc, detalle) => acc + ((detalle.adjuntos || []).length || 0),
+                      0
+                    );
                     return (
                       <View key={`cerrado-${grupo.capacitador}-${r.id}`} style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: COLORS.grayBorder, paddingTop: 10 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -793,21 +967,67 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                             <Text style={styles.detailHint}>
                               {tipo} cerrado | Monto: $ {monto.toLocaleString("es-CL")} | Fecha: {fecha}
                             </Text>
+                            <Text style={styles.detailHint}>Adjuntos disponibles: {totalAdjuntos}</Text>
                           </View>
-                          <Pressable
-                            style={[styles.historyBtn, movLoadingById[r.id] && { opacity: 0.7 }]}
-                            onPress={() => onToggleMovimientos(r.id)}
-                            disabled={!!movLoadingById[r.id]}
-                          >
-                            <Text style={styles.historyBtnText}>
-                              {movLoadingById[r.id]
-                                ? "Cargando..."
-                                : movOpenById[r.id]
-                                  ? compactUi ? "Ocultar" : "Ocultar movimientos"
-                                  : compactUi ? "Movimientos" : "Ver movimientos"}
-                            </Text>
-                          </Pressable>
+                          <View style={styles.historyActionStack}>
+                            <Pressable
+                              style={[styles.historyBtn, totalAdjuntos === 0 && styles.historyBtnDisabled]}
+                              onPress={() =>
+                                totalAdjuntos > 0
+                                  ? setHistoryAdjuntosOpenById((prev) => ({ ...prev, [r.id]: !prev[r.id] }))
+                                  : null
+                              }
+                              disabled={totalAdjuntos === 0}
+                            >
+                              <Text style={[styles.historyBtnText, totalAdjuntos === 0 && styles.historyBtnTextDisabled]}>
+                                {historyAdjuntosOpenById[r.id] ? "Ocultar adjuntos" : "Ver adjuntos"}
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.historyBtn, movLoadingById[r.id] && { opacity: 0.7 }]}
+                              onPress={() => onToggleMovimientos(r.id)}
+                              disabled={!!movLoadingById[r.id]}
+                            >
+                              <Text style={styles.historyBtnText}>
+                                {movLoadingById[r.id]
+                                  ? "Cargando..."
+                                  : movOpenById[r.id]
+                                    ? compactUi ? "Ocultar" : "Ocultar movimientos"
+                                    : compactUi ? "Movimientos" : "Ver movimientos"}
+                              </Text>
+                            </Pressable>
+                          </View>
                         </View>
+                        {historyAdjuntosOpenById[r.id] ? (
+                          <View style={styles.historyAdjuntosWrap}>
+                            {totalAdjuntos === 0 ? (
+                              <Text style={styles.detailHint}>Sin adjuntos para esta rendicion.</Text>
+                            ) : (
+                              (r.detalles || []).map((detalle) => (
+                                <View key={`hist-det-${r.id}-${detalle.id}`} style={styles.historyAdjuntosBlock}>
+                                  <Text style={styles.historyAdjuntosTitle}>{mapCategoriaLabel(detalle.categoria)}</Text>
+                                  {(detalle.adjuntos || []).length ? (
+                                    <View style={styles.historyAdjuntosList}>
+                                      {(detalle.adjuntos || []).map((adjunto) => (
+                                        <Pressable
+                                          key={adjunto.id}
+                                          style={styles.downloadBtn}
+                                          onPress={() => onDownload(adjunto.id, adjunto.nombreArchivo || "adjunto")}
+                                        >
+                                          <Text style={styles.downloadText}>
+                                            Descargar {adjunto.nombreArchivo || "adjunto"}
+                                          </Text>
+                                        </Pressable>
+                                      ))}
+                                    </View>
+                                  ) : (
+                                    <Text style={styles.detailHint}>Sin adjuntos en esta categoria.</Text>
+                                  )}
+                                </View>
+                              ))
+                            )}
+                          </View>
+                        ) : null}
                         {movOpenById[r.id] ? (
                           <View style={styles.movementsWrap}>
                             {movLoadingById[r.id] ? <Text style={styles.detailHint}>Cargando historial...</Text> : null}
@@ -847,6 +1067,150 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
       </View>
       ) : null}
 
+      {viewMode !== "rendiciones" ? (
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Historial de rendiciones revisadas</Text>
+        <View style={[styles.actionsRow, { marginTop: 8, marginBottom: 8, flexWrap: "wrap" }]}>
+          <Pressable style={styles.historyBtn} onPress={() => onExportHistorialRevisado("excel")}>
+            <Text style={styles.historyBtnText}>{compactUi ? "Excel" : "Descargar Excel"}</Text>
+          </Pressable>
+          <Pressable style={styles.historyBtn} onPress={() => onExportHistorialRevisado("pdf")}>
+            <Text style={styles.historyBtnText}>{compactUi ? "PDF" : "Descargar PDF"}</Text>
+          </Pressable>
+        </View>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Registros</Text>
+            <Text style={styles.summaryValue}>{historialRevisadoFiltrado.length}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Aprobadas</Text>
+            <Text style={styles.summaryValue}>
+              {historialRevisadoFiltrado.filter((r) => String(r?.estado || "") === "Aprobada").length}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Rechazadas</Text>
+            <Text style={styles.summaryValue}>
+              {historialRevisadoFiltrado.filter((r) => String(r?.estado || "") === "Rechazada").length}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.saldoFilterRow}>
+          {["Todos", "Aprobada", "Rechazada"].map((estado) => {
+            const active = historialRevisadoEstado === estado;
+            return (
+              <Pressable key={estado} style={quickFilterBtn(active)} onPress={() => setHistorialRevisadoEstado(estado)}>
+                <Text style={quickFilterText(active)}>{estado}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.searchWrap}>
+          <Text style={styles.searchLabel}>Buscar rendiciones revisadas</Text>
+          <TextInput
+            value={historialRevisadoQuery}
+            onChangeText={setHistorialRevisadoQuery}
+            placeholder="Buscar por rendicion, capacitador o destino"
+            placeholderTextColor={COLORS.muted}
+            style={styles.input}
+          />
+        </View>
+        {historialRevisadoFiltrado.length === 0 ? (
+          <Text style={styles.detailHint}>No hay rendiciones revisadas para este filtro.</Text>
+        ) : (
+          historialRevisadoPorCapacitador.map((grupo) => (
+            <View key={`review-cap-${grupo.capacitador}`} style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: COLORS.grayBorder, paddingTop: 10 }}>
+              <Pressable
+                style={styles.groupHeader}
+                onPress={() => setReviewOpenByCap((prev) => ({ ...prev, [grupo.capacitador]: !prev[grupo.capacitador] }))}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{grupo.capacitador}</Text>
+                  <Text style={styles.detailHint}>Rendiciones revisadas: {grupo.rows.length}</Text>
+                </View>
+                <Text style={styles.groupToggle}>{reviewOpenByCap[grupo.capacitador] ? "Ocultar" : "Ver"}</Text>
+              </Pressable>
+
+              {reviewOpenByCap[grupo.capacitador]
+                ? grupo.rows.map((r) => {
+                    const totalAdjuntos = (r.detalles || []).reduce(
+                      (acc, detalle) => acc + ((detalle.adjuntos || []).length || 0),
+                      0
+                    );
+                    return (
+                      <View key={`review-${grupo.capacitador}-${r.id}`} style={styles.reviewItemCard}>
+                        <View style={styles.reviewItemHeader}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.line}>Rendicion #{r.id} - {r?.viaje?.municipio || "-"}</Text>
+                            <Text style={styles.detailHint}>
+                              {r?.estado || "-"} | Fecha: {formatFechaCorta(r?.fechaEnvio)} | Total rendido: $ {Number(r?.totalRendido || 0).toLocaleString("es-CL")}
+                            </Text>
+                            <Text style={styles.detailHint}>Adjuntos disponibles: {totalAdjuntos}</Text>
+                          </View>
+                          <Pressable
+                            style={[styles.historyBtn, totalAdjuntos === 0 && styles.historyBtnDisabled]}
+                            onPress={() =>
+                              totalAdjuntos > 0
+                                ? setReviewAdjuntosOpenById((prev) => ({ ...prev, [r.id]: !prev[r.id] }))
+                                : null
+                            }
+                            disabled={totalAdjuntos === 0}
+                          >
+                            <Text style={[styles.historyBtnText, totalAdjuntos === 0 && styles.historyBtnTextDisabled]}>
+                              {reviewAdjuntosOpenById[r.id] ? "Ocultar adjuntos" : "Ver adjuntos"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                        {reviewAdjuntosOpenById[r.id] ? (
+                          <View style={styles.historyAdjuntosWrap}>
+                            {(r.detalles || []).map((detalle) => (
+                              <View key={`review-det-${r.id}-${detalle.id}`} style={styles.historyAdjuntosBlock}>
+                                <Text style={styles.historyAdjuntosTitle}>{mapCategoriaLabel(detalle.categoria)}</Text>
+                                {(detalle.adjuntos || []).length ? (
+                                  <View style={styles.historyAdjuntosList}>
+                                    {(detalle.adjuntos || []).map((adjunto) => (
+                                      <Pressable
+                                        key={adjunto.id}
+                                        style={styles.downloadBtn}
+                                        onPress={() => onDownload(adjunto.id, adjunto.nombreArchivo || "adjunto")}
+                                      >
+                                        <Text style={styles.downloadText}>
+                                          Descargar {adjunto.nombreArchivo || "adjunto"}
+                                        </Text>
+                                      </Pressable>
+                                    ))}
+                                  </View>
+                                ) : (
+                                  <Text style={styles.detailHint}>Sin adjuntos en esta categoria.</Text>
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })
+                : null}
+            </View>
+          ))
+        )}
+      </View>
+      ) : null}
+
+      {viewMode !== "saldos" ? (
+        <View style={styles.searchWrap}>
+          <Text style={styles.searchLabel}>Buscar rendicion o capacitador</Text>
+          <TextInput
+            value={pendientesQuery}
+            onChangeText={setPendientesQuery}
+            placeholder="Buscar por rendicion, capacitador o destino"
+            placeholderTextColor={COLORS.muted}
+            style={styles.input}
+          />
+        </View>
+      ) : null}
+
       {viewMode !== "saldos" ? (pendientesAgrupados.length === 0 ? (
         <Text style={styles.emptyText}>No hay rendiciones pendientes.</Text>
       ) : (
@@ -874,7 +1238,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                     const guidance = resolveContadoraGuidance(r, tipoResultado);
                     return (
                       <View key={r.id} style={styles.groupItem}>
-                        <View style={styles.cardHeader}>
+                        <View style={[styles.cardHeader, isMobile && styles.cardHeaderMobile]}>
                           <Text style={styles.cardTitle}>Rendicion #{r.id}</Text>
                           <View style={styles.badge}>
                             <Text style={styles.badgeText}>{r.estado}</Text>
@@ -971,7 +1335,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                         <View style={styles.actionsRow}>
                           <Pressable
                             style={[styles.approveBtn, styles.actionMainBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
-                            onPress={() => onResolver(r.id, true)}
+                            onPress={() => onSolicitarResolucion(r, true)}
                             disabled={!!resolviendoById[r.id]}
                           >
                             <Text style={styles.approveText}>{resolviendoById[r.id] ? "Procesando..." : "Aprobar"}</Text>
@@ -987,7 +1351,7 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
                           </Pressable>
                           <Pressable
                             style={[styles.rejectBtn, styles.actionMainBtn, resolviendoById[r.id] && { opacity: 0.7 }]}
-                            onPress={() => onResolver(r.id, false)}
+                            onPress={() => onSolicitarResolucion(r, false)}
                             disabled={!!resolviendoById[r.id]}
                           >
                             <Text style={styles.rejectText}>{resolviendoById[r.id] ? "Procesando..." : "Rechazar"}</Text>
@@ -1027,6 +1391,69 @@ export default function ContadoraRendiciones({ token, viewMode = "all" }) {
           ) : null}
         </>
       )) : null}
+
+      <Modal
+        transparent
+        visible={!!confirmacionResolucion}
+        animationType="fade"
+        onRequestClose={() => setConfirmacionResolucion(null)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmHeader}>
+              <Text style={styles.confirmTitle}>
+                {confirmacionResolucion?.aprobar ? "Confirmar aprobacion" : "Confirmar rechazo"}
+              </Text>
+              <Pressable onPress={() => setConfirmacionResolucion(null)} style={styles.confirmCloseBtn}>
+                <Text style={styles.confirmCloseText}>X</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.confirmLead}>
+              ¿Descargaste la documentacion y estas segura de {confirmacionResumen?.accionLabel} esta rendicion?
+            </Text>
+            <Text style={styles.confirmSublead}>{confirmacionResumen?.subtitulo}</Text>
+
+            <View style={styles.confirmSummaryBox}>
+              <View style={styles.confirmSummaryItem}>
+                <Text style={styles.confirmSummaryLabel}>Total rendido</Text>
+                <Text style={styles.confirmSummaryValue}>
+                  $ {Number(confirmacionResumen?.totalRendido || 0).toLocaleString("es-CL")}
+                </Text>
+              </View>
+              <View style={styles.confirmDivider} />
+              <View style={styles.confirmSummaryItem}>
+                <Text style={styles.confirmSummaryLabel}>Adjuntos cargados</Text>
+                <Text style={styles.confirmSummaryValue}>{confirmacionResumen?.totalAdjuntos || 0}</Text>
+              </View>
+            </View>
+
+            <View style={styles.confirmActions}>
+              <Pressable style={styles.confirmSecondaryBtn} onPress={() => setConfirmacionResolucion(null)}>
+                <Text style={styles.confirmSecondaryText}>Volver a revisar</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  confirmacionResolucion?.aprobar ? styles.confirmApproveBtn : styles.confirmRejectBtn,
+                  resolviendoById[confirmacionResolucion?.rendicion?.id] && { opacity: 0.7 },
+                ]}
+                onPress={() =>
+                  confirmacionResolucion?.rendicion?.id
+                    ? onResolver(confirmacionResolucion.rendicion.id, confirmacionResolucion.aprobar)
+                    : null
+                }
+                disabled={!!resolviendoById[confirmacionResolucion?.rendicion?.id]}
+              >
+                <Text style={styles.confirmPrimaryText}>
+                  {resolviendoById[confirmacionResolucion?.rendicion?.id]
+                    ? "Procesando..."
+                    : confirmacionResumen?.accionBoton}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1100,7 +1527,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
   },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  cardHeaderMobile: { alignItems: "flex-start" },
   cardTitle: { fontWeight: "900", color: COLORS.text, fontSize: 16 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "#EEF3FF" },
   badgeText: { fontWeight: "800", color: COLORS.text, fontSize: 12 },
@@ -1231,6 +1659,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   historyBtnText: { color: COLORS.blue2, fontWeight: "900", fontSize: 12 },
+  historyBtnDisabled: { backgroundColor: "#F3F4F6", borderColor: "#E5E7EB" },
+  historyBtnTextDisabled: { color: "#9CA3AF" },
+  historyActionStack: { gap: 8, alignItems: "flex-end" },
+  historyAdjuntosWrap: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayBorder,
+    paddingTop: 10,
+  },
+  historyAdjuntosBlock: {
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF2F7",
+  },
+  historyAdjuntosTitle: { color: COLORS.text, fontWeight: "900", fontSize: 14, marginBottom: 6 },
+  historyAdjuntosList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  reviewItemCard: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayBorder,
+    paddingTop: 10,
+  },
+  reviewItemHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   colCategoria: { flex: 2.3, textAlign: "left", paddingRight: 12 },
   colAsignado: { flex: 1.2, textAlign: "right" },
   colRendido: { flex: 1.2, textAlign: "right", paddingRight: 12 },
@@ -1244,6 +1696,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.blue2,
   },
   downloadText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  searchWrap: { marginBottom: 14 },
+  searchLabel: { marginBottom: 6, color: COLORS.text, fontWeight: "900", fontSize: 14 },
   input: {
     marginTop: 6,
     minHeight: 40,
@@ -1323,6 +1777,114 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pageText: { color: COLORS.muted, fontWeight: "800", minWidth: 130, textAlign: "center" },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(11,29,63,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  confirmCard: {
+    width: "100%",
+    maxWidth: 760,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    overflow: "hidden",
+  },
+  confirmHeader: {
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayBorder,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  confirmTitle: { color: COLORS.blue2, fontWeight: "900", fontSize: 20 },
+  confirmCloseBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  confirmCloseText: { color: COLORS.muted, fontWeight: "900", fontSize: 22 },
+  confirmLead: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 18,
+    textAlign: "center",
+    lineHeight: 27,
+  },
+  confirmSublead: {
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    color: COLORS.muted,
+    fontWeight: "700",
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  confirmSummaryBox: {
+    marginHorizontal: 24,
+    marginTop: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 16,
+    backgroundColor: "#F8FAFF",
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  confirmSummaryItem: { flex: 1 },
+  confirmSummaryLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 13, marginBottom: 6 },
+  confirmSummaryValue: { color: COLORS.text, fontWeight: "900", fontSize: 22 },
+  confirmDivider: {
+    width: 1,
+    alignSelf: "stretch",
+    backgroundColor: "#D9E5FF",
+  },
+  confirmActions: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayBorder,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    flexDirection: "row",
+    gap: 12,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  confirmSecondaryBtn: {
+    minWidth: 220,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  confirmSecondaryText: { color: COLORS.muted, fontWeight: "900", fontSize: 16 },
+  confirmApproveBtn: {
+    minWidth: 220,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: COLORS.blue2,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  confirmRejectBtn: {
+    minWidth: 220,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "#B42318",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  confirmPrimaryText: { color: "#fff", fontWeight: "900", fontSize: 16 },
 });
 
 

@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "../config/api";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Platform, useWindowDimensions } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Platform, useWindowDimensions, Modal } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
@@ -27,6 +27,7 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [filters, setFilters] = useState({ semana: "", estado: "Todos", destino: "" });
   const [mostrarTodos, setMostrarTodos] = useState(false);
   const [rendiciones, setRendiciones] = useState([]);
@@ -252,6 +253,10 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
     () => Object.values(montos).reduce((acc, v) => acc + Number(v || 0), 0),
     [montos]
   );
+  const totalAdjuntos = useMemo(
+    () => Object.values(archivos).reduce((acc, items) => acc + (Array.isArray(items) ? items.length : 0), 0),
+    [archivos]
+  );
   const diferencia = useMemo(() => totalRendido - totalAsignado, [totalRendido, totalAsignado]);
   const tipoResultado = useMemo(() => {
     if (diferencia > 0) return "Reembolso";
@@ -313,8 +318,20 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
     return "";
   };
 
+  const solicitarConfirmacionEnvio = () => {
+    if (isSending) return;
+    setMensaje("");
+    const err = validateBeforeSend();
+    if (err) {
+      setMensaje(err);
+      return;
+    }
+    setShowConfirmModal(true);
+  };
+
   const enviarRendicion = async () => {
     if (isSending) return;
+    setShowConfirmModal(false);
     setMensaje("");
     const err = validateBeforeSend();
     if (err) {
@@ -608,12 +625,62 @@ export default function CapacitadorRendicion({ token, selectedViajeId, selectedC
           Puedes enviar con diferencia. Si rindes mas, queda reembolso; si rindes menos, queda saldo por
           devolver.
         </Text>
-        <Pressable style={[styles.sendBtn, isSending && styles.sendBtnDisabled]} onPress={enviarRendicion} disabled={isSending}>
+        <Pressable
+          style={[styles.sendBtn, isSending && styles.sendBtnDisabled]}
+          onPress={solicitarConfirmacionEnvio}
+          disabled={isSending}
+        >
           <Text style={styles.sendBtnText}>{isSending ? "Enviando..." : "Enviar rendicion"}</Text>
         </Pressable>
       </View>
 
       {!!mensaje && <Text style={styles.messageText}>{mensaje}</Text>}
+
+      <Modal
+        transparent
+        visible={showConfirmModal}
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={[styles.confirmCard, isMobile && styles.confirmCardMobile]}>
+            <View style={styles.confirmHeader}>
+              <Text style={styles.confirmTitle}>Confirmar envio</Text>
+              <Pressable onPress={() => setShowConfirmModal(false)} style={styles.confirmCloseBtn}>
+                <Text style={styles.confirmCloseText}>X</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.confirmLead}>
+              Estas seguro de que la documentacion adjunta y los montos rendidos son correctos?
+            </Text>
+            <Text style={styles.confirmSubtext}>
+              Una vez enviada, la rendicion quedara en revision de secretaria.
+            </Text>
+            <View style={[styles.confirmSummary, isMobile && styles.confirmSummaryMobile]}>
+              <View style={[styles.confirmMetric, isMobile && styles.confirmMetricMobile]}>
+                <Text style={styles.confirmMetricLabel}>Total rendido</Text>
+                <Text style={styles.confirmMetricValue}>$ {totalRendido.toLocaleString("es-CL")}</Text>
+              </View>
+              <View style={[styles.confirmMetric, isMobile && styles.confirmMetricMobile]}>
+                <Text style={styles.confirmMetricLabel}>Adjuntos cargados</Text>
+                <Text style={styles.confirmMetricValue}>{totalAdjuntos}</Text>
+              </View>
+            </View>
+            <View style={[styles.confirmActions, isMobile && styles.confirmActionsMobile]}>
+              <Pressable style={styles.confirmSecondaryBtn} onPress={() => setShowConfirmModal(false)}>
+                <Text style={styles.confirmSecondaryText}>Volver a revisar</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.confirmPrimaryBtn, isSending && styles.sendBtnDisabled]}
+                onPress={enviarRendicion}
+                disabled={isSending}
+              >
+                <Text style={styles.confirmPrimaryText}>{isSending ? "Enviando..." : "Si, enviar rendicion"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -947,6 +1014,106 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.7 },
   sendBtnText: { fontWeight: "900", color: "#fff" },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  confirmCard: {
+    width: "100%",
+    maxWidth: 760,
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    padding: 24,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  confirmCardMobile: { padding: 18 },
+  confirmHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  confirmTitle: { color: COLORS.blue2, fontSize: 18, fontWeight: "900" },
+  confirmCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F2F6FF",
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+  },
+  confirmCloseText: { color: COLORS.blue2, fontWeight: "900", fontSize: 14 },
+  confirmLead: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 10,
+  },
+  confirmSubtext: {
+    color: COLORS.muted,
+    fontWeight: "700",
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  confirmSummary: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 18,
+  },
+  confirmSummaryMobile: { flexDirection: "column" },
+  confirmMetric: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 14,
+    backgroundColor: "#F8FAFF",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  confirmMetricMobile: { width: "100%" },
+  confirmMetricLabel: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
+  confirmMetricValue: { color: COLORS.text, fontWeight: "900", fontSize: 20, marginTop: 4 },
+  confirmActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+  },
+  confirmActionsMobile: { flexDirection: "column-reverse" },
+  confirmSecondaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmSecondaryText: { color: COLORS.text, fontWeight: "900" },
+  confirmPrimaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: COLORS.blue2,
+    borderWidth: 1,
+    borderColor: "#0D2F6B",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmPrimaryText: { color: "#fff", fontWeight: "900" },
   errorText: { color: COLORS.muted, fontWeight: "700" },
   messageText: { color: COLORS.muted, fontWeight: "800", marginBottom: 12 },
 });

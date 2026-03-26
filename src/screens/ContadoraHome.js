@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView, Image, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, Modal, ScrollView, Image, StyleSheet, useWindowDimensions } from "react-native";
 import dash from "../styles/dashboardStyles";
 import { COLORS } from "../constants/colors";
 import MenuItem from "../components/MenuItem";
@@ -69,9 +69,9 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
     <>
       <View style={dash.profileBox}>
         <Image style={dash.avatarLogo} source={require("../../assets/RindeCas.jpg")} />
-        <View>
+        <View style={styles.profileTextWrap}>
           <Text style={dash.profileName}>Contadora</Text>
-          <Text style={dash.profileRole}>Revision financiera</Text>
+          <Text style={styles.profileRole}>Revision financiera</Text>
         </View>
       </View>
 
@@ -210,3 +210,15 @@ export default function ContadoraHome({ onLogout, token, embedded = false }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  profileTextWrap: { flex: 1, minWidth: 0 },
+  profileRole: {
+    marginTop: 4,
+    color: COLORS.text,
+    fontWeight: "800",
+    fontSize: 13,
+    lineHeight: 17,
+    flexWrap: "wrap",
+  },
+});

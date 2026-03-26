@@ -29,10 +29,13 @@ const dash = StyleSheet.create({
   topBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minHeight: 36,
     borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  topBtnText: { color: "#fff", fontWeight: "900" },
+  topBtnText: { color: "#fff", fontWeight: "900", fontSize: 12, lineHeight: 14 },
 
   body: { flex: 1, flexDirection: "row", minHeight: 0 },
   bodyMobile: { flexDirection: "column" },

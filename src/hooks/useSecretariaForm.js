@@ -14,6 +14,9 @@ import {
 } from "../utils/dateUtils";
 
 const regionNombreToId = (nombre, map) => map[normalizeText(nombre)] || null;
+const OFICINA_MODALIDAD = "Oficina";
+const OFICINA_COMUNA = "Oficina";
+const OFICINA_ALMUERZO = "5000";
 
 export default function useSecretariaForm(authToken) {
   const [activeMenu, setActiveMenu] = useState("gasto");
@@ -64,6 +67,21 @@ export default function useSecretariaForm(authToken) {
     viatico: base.noViatico ? "0" : "",
   });
 
+  const aplicarPresetOficina = (base) => ({
+    ...base,
+    comuna: OFICINA_COMUNA,
+    desayuno: "0",
+    almuerzo: OFICINA_ALMUERZO,
+    once: "0",
+    cena: "0",
+    viatico: "0",
+    noDesayuno: true,
+    noAlmuerzo: false,
+    noOnce: true,
+    noCena: true,
+    noViatico: true,
+  });
+
   const isValidFecha = (value) => !!parseFecha(value);
 
   const validarFormulario = () => {
@@ -73,8 +91,8 @@ export default function useSecretariaForm(authToken) {
     if (!form.capacitador.trim()) return "Capacitador es obligatorio.";
     if (!form.jefe.trim()) return "Jefe es obligatorio.";
     if (!form.region.trim()) return "Region es obligatoria.";
-    if (!form.comuna.trim()) return "Comuna es obligatoria.";
     if (!form.modalidad.trim()) return "Modalidad es obligatoria.";
+    if (!form.comuna.trim()) return "Comuna es obligatoria.";
     const diasNum = Number(form.dias);
     if (!Number.isInteger(diasNum) || diasNum <= 0) return "Dias debe ser mayor a 0.";
     const montos = [
@@ -113,12 +131,29 @@ export default function useSecretariaForm(authToken) {
     setForm((prev) => {
       const next = { ...prev, [campo]: value };
       if (campo === "region" && value !== prev.region) {
-        next.comuna = "";
-        Object.assign(next, limpiarMontosTarifa(next));
+        next.comuna = next.modalidad === OFICINA_MODALIDAD ? OFICINA_COMUNA : "";
+        if (next.modalidad !== OFICINA_MODALIDAD) {
+          Object.assign(next, limpiarMontosTarifa(next));
+        }
         lastMontosKey.current = "";
         if (montosAbortRef.current) montosAbortRef.current.abort();
       }
-      if (campo === "comuna" && value !== prev.comuna) {
+      if (campo === "modalidad" && value !== prev.modalidad) {
+        if (value === OFICINA_MODALIDAD) {
+          Object.assign(next, aplicarPresetOficina(next));
+        } else if (prev.modalidad === OFICINA_MODALIDAD) {
+          next.comuna = "";
+          next.noDesayuno = false;
+          next.noAlmuerzo = false;
+          next.noOnce = false;
+          next.noCena = false;
+          next.noViatico = false;
+          Object.assign(next, limpiarMontosTarifa(next));
+        }
+        lastMontosKey.current = "";
+        if (montosAbortRef.current) montosAbortRef.current.abort();
+      }
+      if (campo === "comuna" && value !== prev.comuna && next.modalidad !== OFICINA_MODALIDAD) {
         Object.assign(next, limpiarMontosTarifa(next));
         lastMontosKey.current = "";
         if (montosAbortRef.current) montosAbortRef.current.abort();
@@ -192,6 +227,15 @@ export default function useSecretariaForm(authToken) {
       copec: Number(form.copec),
     };
 
+    if (form.modalidad === OFICINA_MODALIDAD) {
+      payload.comuna = OFICINA_COMUNA;
+      payload.desayuno = 0;
+      payload.almuerzo = Number(OFICINA_ALMUERZO);
+      payload.once = 0;
+      payload.cena = 0;
+      payload.viatico = 0;
+    }
+
     try {
       setIsSaving(true);
       await crearViaje(payload, authToken);
@@ -260,6 +304,11 @@ export default function useSecretariaForm(authToken) {
   useEffect(() => {
     const regionId = regionNombreToId(form.region, regionIdMap);
     const comunaSeleccionada = (form.comuna || "").trim();
+    if (form.modalidad === OFICINA_MODALIDAD) {
+      lastMontosKey.current = "";
+      if (montosAbortRef.current) montosAbortRef.current.abort();
+      return;
+    }
     if (!regionId || !comunaSeleccionada) return;
 
     const key = `${regionId}|${comunaSeleccionada.toLowerCase()}`;
@@ -288,7 +337,7 @@ export default function useSecretariaForm(authToken) {
         // Sin ruido en consola: el formulario puede seguir operando sin autocompletar montos.
       }
     })();
-  }, [form.region, form.comuna, regionIdMap]);
+  }, [form.region, form.comuna, form.modalidad, regionIdMap]);
 
   return {
     activeMenu,

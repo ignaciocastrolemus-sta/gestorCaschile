@@ -31,6 +31,7 @@ export default function FormularioGasto({
 }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 900;
+  const isOficina = form.modalidad === "Oficina";
   const panelGrid2 = isMobile ? styles.stack : dash.grid2;
   const panelGrid3 = isMobile ? styles.stack : dash.grid3;
   const panelGrid5 = isMobile ? styles.stack : dash.grid5;
@@ -275,6 +276,7 @@ export default function FormularioGasto({
     regionesFiltradas.length > 0 &&
     !isExactMatch(form.region, regionesNombres);
   const showComunas =
+    !isOficina &&
     !!form.comuna && comunasFiltradas.length > 0 && !isExactMatch(form.comuna, municipiosDisponibles);
 
   const DateField = ({ label, value, placeholder, onPress }) => (
@@ -436,9 +438,10 @@ export default function FormularioGasto({
         <View style={panelGrid2}>
           <Field
             label="Comuna / Municipalidad"
-            placeholder="Escribir comuna"
+            placeholder={isOficina ? "Oficina" : "Escribir comuna"}
             value={form.comuna}
             onChangeText={(value) => onTextChange("comuna", value)}
+            disabled={isOficina}
           />
           {!isMobile ? <View /> : null}
         </View>
@@ -477,7 +480,11 @@ export default function FormularioGasto({
 
       <View style={dash.panel}>
         <Text style={dash.panelTitle}>Asignaciones (por dia)</Text>
-        <Text style={styles.panelHint}>Montos diarios definidos por tarifa y periodo activo.</Text>
+        <Text style={styles.panelHint}>
+          {isOficina
+            ? "Modalidad Oficina: se asigna almuerzo fijo de $5.000 por dia y el subtotal se calcula segun los dias."
+            : "Montos diarios definidos por tarifa y periodo activo."}
+        </Text>
 
         <View style={panelGrid5}>
           <Small
@@ -485,35 +492,35 @@ export default function FormularioGasto({
             value={form.desayuno}
             onChangeText={(value) => onNumberChange("desayuno", value)}
             disabled={form.noDesayuno}
-            onToggle={() => onToggleNoAplica("noDesayuno", "desayuno")}
+            onToggle={isOficina ? () => null : () => onToggleNoAplica("noDesayuno", "desayuno")}
           />
           <Small
             label="Almuerzo"
             value={form.almuerzo}
             onChangeText={(value) => onNumberChange("almuerzo", value)}
             disabled={form.noAlmuerzo}
-            onToggle={() => onToggleNoAplica("noAlmuerzo", "almuerzo")}
+            onToggle={isOficina ? () => null : () => onToggleNoAplica("noAlmuerzo", "almuerzo")}
           />
           <Small
             label="Once"
             value={form.once}
             onChangeText={(value) => onNumberChange("once", value)}
             disabled={form.noOnce}
-            onToggle={() => onToggleNoAplica("noOnce", "once")}
+            onToggle={isOficina ? () => null : () => onToggleNoAplica("noOnce", "once")}
           />
           <Small
             label="Cena"
             value={form.cena}
             onChangeText={(value) => onNumberChange("cena", value)}
             disabled={form.noCena}
-            onToggle={() => onToggleNoAplica("noCena", "cena")}
+            onToggle={isOficina ? () => null : () => onToggleNoAplica("noCena", "cena")}
           />
           <Small
             label="Viatico"
             value={form.viatico}
             onChangeText={(value) => onNumberChange("viatico", value)}
             disabled={form.noViatico}
-            onToggle={() => onToggleNoAplica("noViatico", "viatico")}
+            onToggle={isOficina ? () => null : () => onToggleNoAplica("noViatico", "viatico")}
           />
         </View>
 

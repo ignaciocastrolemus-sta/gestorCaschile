@@ -20,6 +20,11 @@ export async function obtenerRendicionesContadora(token) {
   return await apiGet("/Rendiciones/contadora", { token });
 }
 
+export async function obtenerHistorialContadora(token, estado = "") {
+  const query = estado ? `?estado=${encodeURIComponent(estado)}` : "";
+  return await apiGet(`/Rendiciones/contadora/historial${query}`, { token });
+}
+
 export async function obtenerRendicionesMias(token) {
   return await apiGet("/Rendiciones/mias", { token });
 }
@@ -78,4 +83,3 @@ export async function obtenerAdjuntosRendicion(token, rendicionId) {
 export async function descargarAdjuntoRendicion(token, adjuntoId) {
   return await apiGetBlob(`/Rendiciones/adjuntos/${adjuntoId}`, { token });
 }
-

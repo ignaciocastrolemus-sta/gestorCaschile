@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import { apiGet, apiPost, apiPut } from "../api/httpClient";
 import { ScrollView, View, Text, TextInput, Pressable, StyleSheet, Alert, useWindowDimensions } from "react-native";
@@ -357,7 +357,7 @@ export default function AdminUsuarios({ token, title }) {
         <Text style={dash.panelTitle}>{editing ? "Editar usuario" : "Nuevo usuario"}</Text>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Datos bÃ¡sicos</Text>
+          <Text style={styles.sectionTitle}>Datos Basicos</Text>
           <View style={styles.sectionCard}>
             <View style={[styles.grid, isMobile && styles.gridMobile]}>
               <View style={[styles.col, isMobile && styles.colMobile]}>
@@ -408,11 +408,14 @@ export default function AdminUsuarios({ token, title }) {
                         style={[
                           styles.roleChip,
                           { borderColor: `${accent}55`, backgroundColor: active ? `${accent}22` : "#fff" },
+                          isMobile && styles.roleChipMobile,
                         ]}
                         onPress={() => setField("rolId", it.value)}
                       >
                         <Text style={[styles.roleChipTitle, { color: active ? accent : COLORS.text }]}>{displayRole}</Text>
-                        <Text style={styles.roleChipHint}>{ROLE_UI[displayRole]?.hint || "Perfil operativo"}</Text>
+                        <Text style={[styles.roleChipHint, isMobile && styles.roleChipHintMobile]}>
+                          {ROLE_UI[displayRole]?.hint || "Perfil operativo"}
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -430,7 +433,7 @@ export default function AdminUsuarios({ token, title }) {
             <View style={[styles.grid, isMobile && styles.gridMobile]}>
               <View style={[styles.col, isMobile && styles.colMobile]}>
                 <Text style={dash.label}>Activo</Text>
-                <View style={styles.switchRow}>
+                <View style={[styles.switchRow, isMobile && styles.switchRowMobile]}>
                   <Pressable
                     style={[styles.switchTrack, form.activo && styles.switchTrackActive]}
                     onPress={() => setField("activo", !form.activo)}
@@ -712,7 +715,7 @@ const styles = StyleSheet.create({
     borderColor: "#DDE8FF",
   },
   roleChipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  roleChipsWrapMobile: { flexDirection: "column" },
+  roleChipsWrapMobile: { flexDirection: "column", gap: 10 },
   roleChip: {
     minWidth: 150,
     borderWidth: 1,
@@ -723,6 +726,7 @@ const styles = StyleSheet.create({
   roleChipMobile: { minWidth: 0, width: "100%", paddingVertical: 10 },
   roleChipTitle: { fontWeight: "900", fontSize: 13 },
   roleChipHint: { marginTop: 4, color: COLORS.muted, fontWeight: "700", fontSize: 11, lineHeight: 15 },
+  roleChipHintMobile: { fontSize: 12, lineHeight: 17 },
   roleHint: {
     marginTop: 8,
     borderWidth: 1,
@@ -767,6 +771,17 @@ const styles = StyleSheet.create({
   typeChipText: { color: COLORS.text, fontWeight: "800", fontSize: 12 },
   typeChipTextActive: { color: COLORS.blue2 },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
+  switchRowMobile: {
+    minHeight: 48,
+    alignSelf: "stretch",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#D9E5FF",
+    borderRadius: 12,
+    backgroundColor: "#F8FBFF",
+  },
   switchTrack: {
     width: 54,
     height: 30,
